@@ -49,9 +49,6 @@ textarea{width:100%;min-height:90px;border:1.5px solid var(--line);border-radius
 <main id="app"></main>
 
 <!-- Formulaires statiques pour la détection Netlify Forms -->
-<form name="q1m" data-netlify="true" netlify-honeypot="bot-field" hidden><input name="token"><input name="arrivant"><input name="accueil"><input name="consignes"><input name="parrain"><input name="epi"><input name="securite"><input name="danger"><textarea name="danger_detail"></textarea><textarea name="commentaire"></textarea><input name="bot-field"></form>
-<form name="p1m" data-netlify="true" netlify-honeypot="bot-field" hidden><input name="token"><input name="arrivant"><input name="parrain_nom"><input name="c_securite"><input name="c_epi"><input name="c_gestes"><input name="c_autonomie"><input name="c_qualite"><input name="c_equipe"><input name="c_vigilance"><input name="fin_parrainage"><textarea name="commentaire"></textarea><input name="bot-field"></form>
-<form name="q3m" data-netlify="true" netlify-honeypot="bot-field" hidden><input name="token"><input name="arrivant"><input name="experience"><input name="recommande"><textarea name="commentaire"></textarea><input name="bot-field"></form>
 
 <script>
 const GOOGLE_URL = "https://www.google.com/search?q=Groupe+VERDON+-+CICR+Avis";
@@ -101,8 +98,10 @@ document.addEventListener("click",async e=>{
   const g=e.target.closest("[data-seg]"); if(g){ V[g.dataset.seg]=g.dataset.v; render(); return; }
   if(e.target.id==="send"){
     BUSY=true; ERR=""; render();
-    const body=new URLSearchParams({"form-name":F, token:T, arrivant:A, ...(F==="p1m"?{parrain_nom:PA}:{}), ...Object.fromEntries(Object.entries(V).map(([k,v])=>[k,String(v)]))});
-    try{ const r=await fetch("/",{method:"POST",headers:{"Content-Type":"application/x-www-form-urlencoded"},body:body.toString()}); if(!r.ok) throw new Error(r.status); SENT=true; }
+    const answers=Object.fromEntries(Object.entries(V).map(([k,v])=>[k,String(v)]));
+    try{ const r=await fetch("/api/q",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({form:F, token:T, answers})});
+      if(r.status===404||r.status===400){ ERR="Ce lien n'est plus valide. Contactez le service SSE : rerrard@groupe-verdon.com."; }
+      else if(!r.ok) throw new Error(r.status); else SENT=true; }
     catch(_){ ERR="L'envoi n'a pas abouti. Vérifiez votre connexion et réessayez."; }
     BUSY=false; render();
   }

@@ -539,7 +539,6 @@ img.zoom{cursor:zoom-in}
 <main id="app"></main>
 
 <div id="sheet"></div>
-<form name="accueil" data-netlify="true" netlify-honeypot="bot-field" enctype="multipart/form-data" hidden><input name="payload"><input name="nom"><input name="prenom"><input name="email"><input name="poste"><input name="statut"><input name="agence"><input name="date"><input name="quiz"><input type="file" name="attestation"><input name="bot-field"></form>
 
 <script>
 /* =====================================================================
@@ -1787,8 +1786,8 @@ async function sendToSSE(){
     const doc=await buildPdf(); const blob=doc.output("blob"); const d=S.id;
     const name=pdfTxt(`Attestation-accueil-securite_${d.nom}_${d.prenom}_${(d.date||"").replace(/-/g,"")}.pdf`).replace(/[^\w.\-]+/g,"_");
     const pl={v:1,nom:d.nom,prenom:d.prenom,emailPerso:d.emailPerso,statut:d.statut,agence:d.agence,motif:d.motif,poste:d.poste,posteLabel:posteLabel(),date:d.date,lieux:d.lieux,chantier:d.chantier,mineur:d.mineur,quiz:quizScore(),tentatives:S.quiz.attempts,renforcee:renforcee(),fin:S.finishedAt.toISOString()};
-    const fd=new FormData(); fd.append("form-name","accueil"); fd.append("payload",JSON.stringify(pl)); fd.append("nom",d.nom); fd.append("prenom",d.prenom); fd.append("email",d.emailPerso); fd.append("poste",posteLabel()); fd.append("statut",d.statut); fd.append("agence",d.agence||""); fd.append("date",d.date); fd.append("quiz",String(quizScore())); fd.append("attestation",new File([blob],name,{type:"application/pdf"}));
-    const r=await fetch("/",{method:"POST",body:fd}); if(!r.ok) throw new Error(r.status);
+    const fd=new FormData(); fd.append("payload",JSON.stringify(pl)); fd.append("attestation",new File([blob],name,{type:"application/pdf"}));
+    const r=await fetch("/api/accueil",{method:"POST",body:fd}); if(!r.ok) throw new Error(r.status);
     S.sendState="ok";
   }catch(_){ S.sendState="fail"; }
   if(S.step===6) render();

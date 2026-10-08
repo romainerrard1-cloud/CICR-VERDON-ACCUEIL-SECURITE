@@ -1,0 +1,9 @@
+{
+  "name": "cicr-verdon-accueil-securite",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.3",
+    "@netlify/functions": "^6.0.2"
+  }
+}
