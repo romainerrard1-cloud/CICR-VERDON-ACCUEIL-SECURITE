@@ -505,6 +505,7 @@ img.zoom{cursor:zoom-in}
 
 .risks.majors{grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
 .risk.major{border:2.5px solid #c8102e;min-height:150px}
+.godfather .badge .q.pini{font-size:2rem;width:84px;height:84px;border-radius:50%;background:var(--action);color:#fff;display:grid;place-items:center;margin:0 auto 10px}
 .renf-band{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;background:#fde8eb;border-left:5px solid #c8102e;border-radius:8px;padding:10px 14px;margin:0 0 14px}
 .renf-band .eyebrow{color:#c8102e;font-weight:700}.renf-band span:last-child{font-size:.92rem}
 .renf-steps{display:grid;gap:12px;margin:16px 0}
@@ -1678,20 +1679,29 @@ function viewPoste(err){
 /* =====================================================================
    ÉTAPE 5 — PARRAIN TUTEUR
    ===================================================================== */
+function loadParrain(){
+  const d=S.id, key=[d.poste,d.client,(d.lieux||[]).join("|")].join("/");
+  if(S.parrainKey===key) return; S.parrainKey=key; S.parrainProp=undefined;
+  const q=new URLSearchParams({poste:d.poste||"",client:d.lieux.includes("Chantier client")?(d.client||""):"",lieux:(d.lieux||[]).join("|")});
+  fetch("/api/parrain?"+q).then(r=>r.ok?r.json():{}).catch(()=>({})).then(j=>{ if(S.parrainKey!==key) return; S.parrainProp=j&&j.nom?j:null; if(S.step===5){ NOANIM=true; render(); NOANIM=false; } });
+}
 function viewParrain(){
+  loadParrain(); const P=S.parrainProp, ini=P?P.nom.split(/\s+/).map(w=>w[0]).join("").slice(0,2).toUpperCase():"";
   return `<section class="scene">
     <p class="eyebrow">Étape 5 sur 6</p>
     <h2 style="font-size:clamp(2rem,5vw,3rem);text-transform:uppercase;font-weight:800;margin:6px 0 18px">Votre parrain tuteur</h2>
     <div class="godfather">
-      <div class="badge"><div><div class="q">?</div><p>Votre parrain vous sera présenté à votre arrivée.</p></div></div>
+      <div class="badge"><div>${P?`<div class="q pini">${esc(ini)}</div><p><b style="display:block;font-size:1.15rem">${esc(P.nom)}</b>${esc(P.role||"")}</p>`:`<div class="q">?</div><p>${P===undefined?"Recherche de votre parrain…":"Votre parrain vous sera présenté à votre arrivée."}</p>`}</div></div>
       <div class="stagger" style="display:grid;gap:14px">
-        <p class="lead">Pendant vos premières semaines, une personne expérimentée de l'équipe vous accompagne. Elle est choisie en fonction de votre poste.</p>
+        ${P?`<p class="lead">Votre parrain tuteur sera <b>${esc(P.nom)}</b>${P.role?`, ${esc(P.role)}`:""}. N'hésitez pas à vous adresser à ${esc(P.nom.split(" ")[0])} en cas de besoin : votre parrain vous accompagne pendant vos premières semaines.</p>
+        <div class="callout good"><b>Pourquoi ${esc(P.nom.split(" ")[0])} ?</b><span>${esc(P.pourquoi||"")}</span></div>
+        <p class="hint" style="margin:0">Votre parrain est choisi selon votre lieu de travail et votre poste. Le service SSE vous le confirmera par mail.</p>`:`<p class="lead">Pendant vos premières semaines, une personne expérimentée de l'équipe vous accompagne. Elle est choisie en fonction de votre lieu de travail et de votre poste.</p>`}
         <div class="cols">
           <div class="tile"><h4>Son rôle</h4><ul class="clean"><li>Vous accueillir et vous présenter l'équipe</li><li>Vous montrer votre poste et les bons gestes</li><li>Vérifier que vous avez compris les consignes</li><li>Répondre à toutes vos questions, même celles qui paraissent bêtes</li></ul></div>
           <div class="tile"><h4>Pourquoi lui ou elle ?</h4><ul class="clean"><li>Bonne connaissance de l'entreprise</li><li>Compétences techniques sur votre métier</li><li>Expérience du poste dans son environnement</li><li>Exigeant sur la sécurité</li><li>Sait transmettre</li></ul></div>
         </div>
         <div class="callout info"><span>À la fin de la période d'accompagnement, vous et votre parrain signez ensemble la fin du parrainage.</span></div>
-        <label class="check-line"><input type="checkbox" id="f-parrain" ${S.parrainOk?"checked":""}><span>J'ai compris le rôle de mon parrain tuteur et je m'adresserai à lui en cas de doute.</span></label>
+        <label class="check-line"><input type="checkbox" id="f-parrain" ${S.parrainOk?"checked":""}><span>J'ai compris le rôle de mon parrain tuteur${P?` (${esc(P.nom)})`:""} et je m'adresserai à lui en cas de doute.</span></label>
       </div>
     </div>
     <div class="nav"><button class="btn ghost" data-act="back4">← Votre poste</button><button class="btn" data-act="parrainNext" ${S.parrainOk?"":"disabled"}>Continuer vers l'attestation →</button></div>
@@ -1773,7 +1783,7 @@ const pdfTxt = s => String(s??"").replace(/[’‘]/g,"'").replace(/[“”«»]
 async function buildPdf(){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({unit:"mm",format:"a4"});
-  try{ const d0=S.id, pl={v:1,nom:d0.nom,prenom:d0.prenom,emailPerso:d0.emailPerso,statut:d0.statut,agence:d0.agence,motif:d0.motif,poste:d0.poste,posteLabel:posteLabel(),date:d0.date,lieux:d0.lieux,client:d0.lieux.includes("Chantier client")?d0.client:"",chantier:d0.chantier,mineur:d0.mineur,quiz:quizScore(),tentatives:S.quiz.attempts,renforcee:renforcee(),rq:rqNote(),risques:top3().map(k=>RISKS[k].t),prat:(poste()?.prat||[]).map(k=>PRAT[k]?PRAT[k][0]+" : "+PRAT[k][1]:k).concat(S.renfExtra||[]),formations:formsFor().filter(k=>S.forms[k]==="Oui").map(k=>FORMS[k].l+(S.formsDet[k]?" ("+S.formsDet[k]+")":"")).concat(S.formsExtra||[]),fin:S.finishedAt?S.finishedAt.toISOString():""};
+  try{ const d0=S.id, pl={v:1,nom:d0.nom,prenom:d0.prenom,emailPerso:d0.emailPerso,statut:d0.statut,agence:d0.agence,motif:d0.motif,poste:d0.poste,posteLabel:posteLabel(),date:d0.date,lieux:d0.lieux,client:d0.lieux.includes("Chantier client")?d0.client:"",parrainPropose:S.parrainProp?.nom||"",chantier:d0.chantier,mineur:d0.mineur,quiz:quizScore(),tentatives:S.quiz.attempts,renforcee:renforcee(),rq:rqNote(),risques:top3().map(k=>RISKS[k].t),prat:(poste()?.prat||[]).map(k=>PRAT[k]?PRAT[k][0]+" : "+PRAT[k][1]:k).concat(S.renfExtra||[]),formations:formsFor().filter(k=>S.forms[k]==="Oui").map(k=>FORMS[k].l+(S.formsDet[k]?" ("+S.formsDet[k]+")":"")).concat(S.formsExtra||[]),fin:S.finishedAt?S.finishedAt.toISOString():""};
     doc.setProperties({title:"Attestation accueil sécurité CICR Verdon", subject:"CICRACCUEIL1:"+btoa(unescape(encodeURIComponent(JSON.stringify(pl))))}); }catch(_){ }
   const W=210, M=16; let y=0;
   const T=(s,x,yy,o)=>doc.text(pdfTxt(s),x,yy,o);
@@ -1811,6 +1821,7 @@ async function buildPdf(){
   if(it){ doc.setTextColor(90); para("Les justificatifs des formations déclarées « Oui » pourront être demandés à l'agence "+(S.id.agence||"d'intérim")+".",8.5); doc.setTextColor(0); }
   y+=1;
   sec("Accueil renforcé à la sécurité"+(renforcee()?" (art. L4154-2)":"")); kv([["Partie théorique","Réalisée en ligne : 3 risques majeurs du poste lus, questionnaire "+(rqNote()??"-")+"/10"],["Partie pratique","Sur le terrain, avec le chef d'équipe (voir page suivante)"]]);
+  if(S.parrainProp?.nom){ sec("Parrain tuteur"); kv([["Parrain proposé",S.parrainProp.nom+(S.parrainProp.role?", "+S.parrainProp.role:"")+" (confirmé par le service SSE)"]]); }
   sec("Engagements et signature");
   para("Je soussigné(e) atteste avoir suivi l'intégralité de l'accueil sécurité, compris les consignes présentées, et m'engage à respecter la politique SSE, les 7 règles essentielles, le règlement intérieur et les consignes des sites clients. Je sais qu'un parrain tuteur me sera présenté à mon arrivée, ainsi que ma formation au poste"+(renforcee()?" et ma formation renforcée à la sécurité.":"."));
   if(y>263){doc.addPage();head("Attestation d'accueil sécurité (suite)");}
@@ -1845,7 +1856,7 @@ async function sendToSSE(){
   try{
     const doc=await buildPdf(); const blob=doc.output("blob"); const d=S.id;
     const name=pdfTxt(`Attestation-accueil-securite_${d.nom}_${d.prenom}_${(d.date||"").replace(/-/g,"")}.pdf`).replace(/[^\w.\-]+/g,"_");
-    const pl={v:1,nom:d.nom,prenom:d.prenom,emailPerso:d.emailPerso,statut:d.statut,agence:d.agence,motif:d.motif,poste:d.poste,posteLabel:posteLabel(),date:d.date,lieux:d.lieux,client:d.lieux.includes("Chantier client")?d.client:"",chantier:d.chantier,mineur:d.mineur,quiz:quizScore(),tentatives:S.quiz.attempts,renforcee:renforcee(),rq:rqNote(),risques:top3().map(k=>RISKS[k].t),prat:(poste()?.prat||[]).map(k=>PRAT[k]?PRAT[k][0]+" : "+PRAT[k][1]:k).concat(S.renfExtra||[]),formations:formsFor().filter(k=>S.forms[k]==="Oui").map(k=>FORMS[k].l+(S.formsDet[k]?" ("+S.formsDet[k]+")":"")).concat(S.formsExtra||[]),fin:S.finishedAt.toISOString()};
+    const pl={v:1,nom:d.nom,prenom:d.prenom,emailPerso:d.emailPerso,statut:d.statut,agence:d.agence,motif:d.motif,poste:d.poste,posteLabel:posteLabel(),date:d.date,lieux:d.lieux,client:d.lieux.includes("Chantier client")?d.client:"",parrainPropose:S.parrainProp?.nom||"",chantier:d.chantier,mineur:d.mineur,quiz:quizScore(),tentatives:S.quiz.attempts,renforcee:renforcee(),rq:rqNote(),risques:top3().map(k=>RISKS[k].t),prat:(poste()?.prat||[]).map(k=>PRAT[k]?PRAT[k][0]+" : "+PRAT[k][1]:k).concat(S.renfExtra||[]),formations:formsFor().filter(k=>S.forms[k]==="Oui").map(k=>FORMS[k].l+(S.formsDet[k]?" ("+S.formsDet[k]+")":"")).concat(S.formsExtra||[]),fin:S.finishedAt.toISOString()};
     const fd=new FormData(); fd.append("payload",JSON.stringify(pl)); fd.append("attestation",new File([blob],name,{type:"application/pdf"}));
     const r=await fetch("/api/accueil",{method:"POST",body:fd}); if(!r.ok) throw new Error(r.status);
     S.sendState="ok";

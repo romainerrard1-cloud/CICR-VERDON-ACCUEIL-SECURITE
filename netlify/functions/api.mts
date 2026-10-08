@@ -1,5 +1,6 @@
 import { getStore } from "@netlify/blobs";
 import type { Config, Context } from "@netlify/functions";
+import { mergeDefaults, pickParrain } from "../lib/parrains.mts";
 import { mailFor, renderText, renderHtml, siteUrl, sendMail, processDossier, mailConfigured, STEPS } from "../lib/mails.mts";
 
 /* API de l'espace SSE CICR Verdon.
@@ -98,10 +99,21 @@ export default async (req: Request, _context: Context) => {
       return json({ ok: true });
     }
 
+    if (p[0] === "parrain" && m === "GET") {
+      /* public : le nom et la raison du parrain proposé, sans son mail */
+      const stored = await st.get("config/parrains", { type: "json" }) as any;
+      const list = (stored?.seeded >= 2) ? stored.list : mergeDefaults(stored?.list || []);
+      const q = url.searchParams;
+      const pa = pickParrain(list, { poste: q.get("poste") || "", client: q.get("client") || "", lieux: (q.get("lieux") || "").split("|").filter(Boolean) });
+      return json(pa ? { nom: pa.nom, role: pa.role || "", pourquoi: pa.pourquoi || "" } : {});
+    }
+
     /* ---------- privé ---------- */
     if (!(await isAuthed(req))) return json({ error: "auth" }, 401);
 
     if (p[0] === "state" && m === "GET") {
+      { const cur = await st.get("config/parrains", { type: "json" }) as any;
+        if (!(cur?.seeded >= 2)) await st.setJSON("config/parrains", { list: mergeDefaults(cur?.list || []), seeded: 2 }); }
       const [dossiers, recus, parrains, settings] = await Promise.all([
         listJSON("dossiers/"), listJSON("recus/"),
         st.get("config/parrains", { type: "json" }), st.get("config/settings", { type: "json" }),
@@ -169,6 +181,7 @@ export default async (req: Request, _context: Context) => {
 
     if (p[0] === "config" && (p[1] === "parrains" || p[1] === "settings") && m === "PUT") {
       const body = await req.json();
+      if (p[1] === "parrains") body.seeded = 2;
       await st.setJSON("config/" + p[1], body);
       return json({ ok: true });
     }
