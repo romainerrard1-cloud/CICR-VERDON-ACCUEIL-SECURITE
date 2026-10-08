@@ -6,8 +6,8 @@ import { mailFor, renderText, renderHtml, siteUrl, sendMail, processDossier, mai
    Public : POST /api/accueil (fin d'accueil), POST /api/q (questionnaires), POST /api/login.
    Privé (jeton) : état, dossiers, accueils reçus, parrains, réglages. */
 
-const ANSWER_KEYS = ["accueil","consignes","parrain","epi","securite","danger","danger_detail","commentaire","c_securite","c_risques","c_epi","c_gestes","c_autonomie","c_qualite","c_ponctualite","c_hierarchie","c_equipe","c_vigilance","fin_parrainage","experience","recommande","signataire"];
-const FORMS = ["q1m","p1m","q3m"];
+const ANSWER_KEYS = ["accueil","consignes","parrain","epi","securite","danger","danger_detail","commentaire","c_securite","c_risques","c_epi","c_gestes","c_autonomie","c_qualite","c_ponctualite","c_hierarchie","c_equipe","c_vigilance","fin_parrainage","experience","recommande","signataire","confirme"];
+const FORMS = ["q1m","p1m","q3m","ack"];
 const enc = new TextEncoder();
 
 function store() {
@@ -114,7 +114,8 @@ export default async (req: Request, _context: Context) => {
       if (m === "PUT") {
         const d = await req.json();
         d.id = id;
-        for (const k of FORMS) { const t = d.steps?.[k]?.token; if (t && safeId(t)) await st.setJSON("tok/" + t, { id, k }); }
+        d.steps = d.steps || {};
+        for (const k of FORMS) { const s0 = d.steps[k] || (d.steps[k] = {}); if (!s0.token) s0.token = rid() + rid(); if (safeId(s0.token)) await st.setJSON("tok/" + s0.token, { id, k }); }
         /* parrain changé : on renvoie les mails de désignation au nouveau parrain et à l'arrivant */
         const prev = await st.get("dossiers/" + id, { type: "json" }) as any;
         if (prev?.parrain?.email && d.parrain?.email && prev.parrain.email !== d.parrain.email) {

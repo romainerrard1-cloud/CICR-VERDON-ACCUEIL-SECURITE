@@ -31,7 +31,7 @@ const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&
 function qLink(d: any, k: string, settings: any) {
   const s = d.steps?.[k] || {};
   const p = new URLSearchParams({ f: k, t: s.token || "", a: k === "p1m" ? fullName(d) : d.prenom || "" });
-  if ((k === "q1m" || k === "p1m") && d.parrain?.nom) p.set("p", d.parrain.nom);
+  if ((k === "q1m" || k === "p1m" || k === "ack") && d.parrain?.nom) p.set("p", d.parrain.nom);
   return `${siteUrl(settings)}/q.html?${p}`;
 }
 
@@ -75,20 +75,22 @@ export function mailFor(d: any, k: string, settings: any): Mail | null {
       `l'accompagner, avec le chef d'équipe, dans la partie pratique de l'accueil renforcé${d.rq != null ? ` (note de la partie théorique : ${d.rq}/10)` : ""} ;`,
       "rester disponible pour toutes ses questions.",
     ] },
-    `Dans un mois, un petit questionnaire vous sera envoyé afin d'évaluer ${fullName(d)}.`,
+    "Merci de confirmer en un clic que vous avez pris connaissance de vos missions :",
+    { button: ["Je confirme mes missions de parrain", qLink(d, "ack", settings)] },
+    `Dans un mois (ou à la fin de sa mission si elle est plus courte), un petit questionnaire vous sera envoyé afin d'évaluer ${fullName(d)}.`,
     "Merci pour votre engagement,", sign,
   ] };
 
-  if (k === "q1m") return { to: d.emailPerso, toName: fullName(d), subject: "Votre premier mois chez CICR Verdon : notez votre accueil", blocks: [
+  if (k === "q1m") return { to: d.emailPerso, toName: fullName(d), subject: d.finMission ? "Votre mission chez CICR Verdon : notez votre accueil" : "Votre premier mois chez CICR Verdon : notez votre accueil", blocks: [
     `Bonjour ${d.prenom},`,
-    "Cela fait un mois que vous nous avez rejoints. Notez en 2 minutes votre accueil, la sécurité et votre parrain tuteur : votre avis nous aide à nous améliorer.",
+    d.finMission ? "Votre mission chez CICR Verdon se termine : merci pour votre travail. Notez en 2 minutes votre accueil, la sécurité et votre parrain tuteur : votre avis nous aide à nous améliorer." : "Cela fait un mois que vous nous avez rejoints. Notez en 2 minutes votre accueil, la sécurité et votre parrain tuteur : votre avis nous aide à nous améliorer.",
     { button: ["Répondre au questionnaire", qLink(d, "q1m", settings)] },
     "Merci !", sign,
   ] };
 
-  if (k === "p1m") return { to: pa.email, toName: pa.nom, subject: `Évaluation à 1 mois de ${fullName(d)}`, blocks: [
+  if (k === "p1m") return { to: pa.email, toName: pa.nom, subject: d.finMission ? `Évaluation de fin de mission de ${fullName(d)}` : `Évaluation à 1 mois de ${fullName(d)}`, blocks: [
     `Bonjour ${first(pa.nom)},`,
-    `Cela fait un mois que vous accompagnez ${fullName(d)}. Merci de noter ses premières semaines (sécurité, risques majeurs, EPI, gestes du métier, autonomie…) et de nous dire si la période d'accompagnement peut se terminer.`,
+    `${d.finMission ? `La mission de ${fullName(d)} se termine.` : `Cela fait un mois que vous accompagnez ${fullName(d)}.`} Merci de noter ses premières semaines (sécurité, risques majeurs, EPI, gestes du métier, autonomie…) et de nous dire si la période d'accompagnement peut se terminer.`,
     { button: ["Évaluer en 2 minutes", qLink(d, "p1m", settings)] },
     "Merci !", sign,
   ] };

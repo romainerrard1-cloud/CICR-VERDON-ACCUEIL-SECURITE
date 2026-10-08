@@ -43,6 +43,7 @@ textarea{width:100%;min-height:90px;border:1.5px solid var(--line);border-radius
  .inp{width:100%;border:1.5px solid var(--line);border-radius:10px;padding:10px;font:inherit;background:var(--surface-2);color:var(--ink)}
 .sigw{position:relative;height:160px;border:1.5px dashed var(--line);border-radius:10px;background:#fff;touch-action:none}
 .sigw canvas{width:100%;height:100%;display:block}.sigw .ph{position:absolute;inset:0;display:grid;place-items:center;color:var(--muted);pointer-events:none;font-size:.9rem}
+.ml{margin:0;padding-left:20px;display:grid;gap:4px}
 .lnk{border:0;background:none;color:var(--action);text-decoration:underline;cursor:pointer;font:inherit;font-size:.88rem;padding:0}
 :focus-visible{outline:3px solid var(--action);outline-offset:2px;border-radius:6px}
 @media (max-width:560px){.row{grid-template-columns:1fr}}
@@ -57,7 +58,7 @@ textarea{width:100%;min-height:90px;border:1.5px solid var(--line);border-radius
 const GOOGLE_URL = "https://www.google.com/search?q=Groupe+VERDON+-+CICR+Avis";
 const P = new URLSearchParams(location.search);
 const F = P.get("f"), T = P.get("t")||"", A = P.get("a")||"", PA = P.get("p")||"";
-const V = {}; if(F==="p1m"&&PA) V.signataire=PA;
+const V = {}; if((F==="p1m"||F==="ack")&&PA) V.signataire=PA;
 const esc = s => String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const stars = n => `<div class="stars" role="radiogroup">${[1,2,3,4,5].map(i=>`<button type="button" data-star="${n}" data-v="${i}" class="${(V[n]||0)>=i?"on":""}" aria-label="${i} sur 5">★</button>`).join("")}</div>`;
 const seg = (n,opts) => `<div class="seg">${opts.map(o=>`<button type="button" data-seg="${n}" data-v="${esc(o)}" aria-pressed="${V[n]===o}">${esc(o)}</button>`).join("")}</div>`;
@@ -83,6 +84,19 @@ const DEF = {
         <input class="inp" data-txt="signataire" placeholder="Prénom Nom du parrain" value="${esc(V.signataire||"")}">
         <div class="sigw"><canvas id="sig"></canvas><span class="ph" ${V.signature?"hidden":""}>Signez ici avec le doigt ou la souris</span></div>
         <div><button type="button" class="lnk" id="sigclear">Effacer la signature</button></div></div>`},
+  ack:{t:"Vos missions de parrain tuteur", lead:`Vous êtes désigné(e) parrain tuteur de ${esc(A)||"un nouvel arrivant"}. Merci de confirmer que vous avez pris connaissance de vos missions.`,
+    req:["confirme","signataire"],
+    body:()=>`
+      <div class="q"><b>Vos missions</b><ul class="ml">
+        <li>L'accueillir et le présenter à l'équipe.</li>
+        <li>Lui montrer son poste, les modes opératoires et les bons gestes.</li>
+        <li>Veiller aux 3 risques majeurs de son poste (indiqués dans le mail reçu).</li>
+        <li>Vérifier le port des EPI et la bonne compréhension des consignes de sécurité.</li>
+        <li>L'accompagner, avec le chef d'équipe, dans la partie pratique de l'accueil renforcé.</li>
+        <li>Rester disponible pour ses questions, et remonter toute difficulté au service SSE.</li>
+        <li>Évaluer ses premières semaines (à 1 mois ou en fin de mission) et acter la fin de l'accompagnement.</li></ul></div>
+      <div class="q"><b>Confirmation</b>${seg("confirme",["Je confirme avoir pris connaissance de mes missions"])}</div>
+      <div class="q"><b>Votre nom</b><input class="inp" data-txt="signataire" placeholder="Prénom Nom" value="${esc(V.signataire||"")}"></div>`},
   q3m:{t:"Votre expérience chez Verdon", lead:`Bonjour ${esc(A)}, cela fait trois mois que vous travaillez avec nous. Comment cela s'est-il passé ?`,
     req:["experience","recommande"],
     body:()=>`

@@ -87,6 +87,12 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--surface-2)}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b2127;color:#fff;padding:10px 16px;border-radius:10px;z-index:60;font-size:.9rem}
 .mono{font-family:var(--fm);font-size:.8rem}
 @media (max-width:760px){.grid2{grid-template-columns:1fr}.task{grid-template-columns:1fr}.prow{grid-template-columns:1fr}}
+.sheet.wide{max-width:860px}
+.tform{display:grid;gap:14px}.tform fieldset{border:1px solid var(--line);border-radius:12px;padding:10px 14px 12px;margin:0}.tform legend{font-weight:600;padding:0 6px}
+.trow{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center;padding:7px 0;border-bottom:1px solid var(--line)}.trow:last-child{border-bottom:0}
+.tchecks{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px}.tchecks label,.tcheck{display:flex;gap:6px;align-items:center;font-size:.92rem}.tchecks input,.tcheck input{width:auto}
+.tsig{height:150px}
+@media (max-width:620px){.trow{grid-template-columns:1fr}}
 .crits{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .pcrit{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:.86rem;padding:4px 0 8px}.pcrit label{display:flex;gap:5px;align-items:center}.pcrit input{width:auto}
 details.alt summary{cursor:pointer;color:var(--muted);font-size:.88rem}
@@ -112,6 +118,8 @@ const DEFAULT_SETTINGS = {site:location.origin, google:"https://www.google.com/s
 const STEPS = [
   {k:"mailArrivant", l:"Mail de bienvenue à l'arrivant", d:0, to:"arrivant"},
   {k:"mailParrain", l:"Mail au parrain tuteur", d:0, to:"parrain"},
+  {k:"ack", l:"Missions confirmées par le parrain", d:0, to:"parrain", form:true, nomail:true},
+  {k:"terrain", l:"Accueil au poste, avec l'arrivant", d:0, to:"arrivant", local:true},
   {k:"q1m", l:"Questionnaire arrivant à 1 mois", d:30, to:"arrivant", form:true},
   {k:"p1m", l:"Évaluation par le parrain à 1 mois", d:30, to:"parrain", form:true},
   {k:"q3m", l:"Expérience à 3 mois (étoiles + avis Google)", d:90, to:"arrivant", form:true}
@@ -137,10 +145,13 @@ function toast(m){ const t=document.createElement("div"); t.className="toast"; t
 /* ===================== Tâches dues ===================== */
 function stepState(d,st){
   const s=(d.steps||{})[st.k]||{};
+  if(st.local){ if(d.terrain?.doneAt) return {state:"ok", s:{doneAt:d.terrain.doneAt}}; const due=addDays(d.date||new Date().toISOString().slice(0,10),0), diff=Math.round((due-today())/864e5); return {state: diff<0?"late": diff===0?"now": diff<=7?"soon":"later", due, diff, s:{}}; }
+  if(st.nomail){ if(s.doneAt) return {state:"ok", s}; if(!d.parrain?.nom) return {state:"blocked", s}; const ms=(d.steps||{}).mailParrain||{}; return ms.sentAt?{state:"wait", s:{...s, sentAt:ms.sentAt}}:{state:"later", s}; }
   if(st.form ? s.doneAt : s.sentAt) return {state:"ok", s};
   if(!d.parrain?.nom && (st.to==="parrain" || st.k==="mailArrivant")) return {state:"blocked", s};
   if(st.d===0) return {state:"now", due:today(), diff:0, s}; /* bienvenue et parrain : à envoyer dès la désignation */
-  const due=addDays(d.date||new Date().toISOString().slice(0,10), st.d);
+  let due=addDays(d.date||new Date().toISOString().slice(0,10), st.d);
+  if(d.finMission && (st.k==="q1m"||st.k==="p1m")){ const fm=new Date(d.finMission+"T12:00:00"); fm.setHours(0,0,0,0); if(fm<due) due=fm; }
   if(st.form && s.sentAt) return {state:"wait", due, s};
   const diff=Math.round((due-today())/864e5);
   return {state: diff<0?"late": diff===0?"now": diff<=7?"soon":"later", due, diff, s};
@@ -152,11 +163,13 @@ function tasks(){
     if(d.archived) return;
     if(!d.parrain?.nom) out.push({d, k:"parrain", cls:"t-late", when:"Maintenant", l:"Désigner le parrain tuteur", sub:`${fullName(d)} · ${d.posteLabel||""}`});
     STEPS.forEach(st=>{ const r=stepState(d,st);
+      if(st.nomail) return;
+      if(st.local){ if(["late","now","soon"].includes(r.state)) out.push({d, k:"terrain", cls:r.state==="late"?"t-late":r.state==="now"?"t-now":"t-soon", when:r.state==="late"?"En retard":r.state==="now"?"Aujourd'hui":`Dans ${r.diff} j`, date:r.due, l:(d.finMission&&/1m$/.test(st.k)?st.l.replace("à 1 mois","de fin de mission"):st.l), sub:`${fullName(d)} · à remplir ici avec lui ou elle`}); return; }
       if(S.mailOk){ const s=(d.steps||{})[st.k]||{};
-        if(s.error && !s.sentAt) out.push({d, k:st.k, cls:"t-late", when:"Échec d'envoi", date:null, l:st.l, sub:`${fullName(d)} · ${s.error}`});
-        else if(r.state==="late" && r.diff<-1 && !s.sentAt) out.push({d, k:st.k, cls:"t-late", when:"Non envoyé", date:r.due, l:st.l, sub:`${fullName(d)} · ${d.posteLabel||""}`});
+        if(s.error && !s.sentAt) out.push({d, k:st.k, cls:"t-late", when:"Échec d'envoi", date:null, l:(d.finMission&&/1m$/.test(st.k)?st.l.replace("à 1 mois","de fin de mission"):st.l), sub:`${fullName(d)} · ${s.error}`});
+        else if(r.state==="late" && r.diff<-1 && !s.sentAt) out.push({d, k:st.k, cls:"t-late", when:"Non envoyé", date:r.due, l:(d.finMission&&/1m$/.test(st.k)?st.l.replace("à 1 mois","de fin de mission"):st.l), sub:`${fullName(d)} · ${d.posteLabel||""}`});
         return; }
-      if(["late","now","soon"].includes(r.state)) out.push({d, k:st.k, cls:r.state==="late"?"t-late":r.state==="now"?"t-now":"t-soon", when:r.state==="late"?`En retard`:r.state==="now"?"Aujourd'hui":`Dans ${r.diff} j`, date:r.due, l:st.l, sub:`${fullName(d)} · ${d.posteLabel||""}`});
+      if(["late","now","soon"].includes(r.state)) out.push({d, k:st.k, cls:r.state==="late"?"t-late":r.state==="now"?"t-now":"t-soon", when:r.state==="late"?`En retard`:r.state==="now"?"Aujourd'hui":`Dans ${r.diff} j`, date:r.due, l:(d.finMission&&/1m$/.test(st.k)?st.l.replace("à 1 mois","de fin de mission"):st.l), sub:`${fullName(d)} · ${d.posteLabel||""}`});
     });
   });
   const ord={"t-late":0,"t-now":1,"t-soon":2}; return out.sort((a,b)=>ord[a.cls]-ord[b.cls]||(a.date||0)-(b.date||0));
@@ -170,8 +183,9 @@ function emlOf(P){
   const html=`<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:12px">${P.html}</body></html>`;
   return ["X-Unsent: 1",`To: ${P.to||""}`,`Subject: =?UTF-8?B?${b64u(P.subject)}?=`,"MIME-Version: 1.0",'Content-Type: multipart/alternative; boundary="cicr-b"',"","--cicr-b","Content-Type: text/plain; charset=UTF-8","Content-Transfer-Encoding: base64","",wrap(b64u(P.text)),"--cicr-b","Content-Type: text/html; charset=UTF-8","Content-Transfer-Encoding: base64","",wrap(b64u(html)),"--cicr-b--",""].join("\r\n");
 }
-async function fichePdf(d){
-  const {PDFDocument,StandardFonts,rgb}=PDFLib; const pdf=await PDFDocument.create();
+async function fichePdf(d){ const pdf=await PDFLib.PDFDocument.create(); await ficheInto(pdf,d); download(new Blob([await pdf.save()],{type:"application/pdf"}),`Fiche_suivi_${d.nom}_${d.prenom}.pdf`); toast("Fiche de suivi téléchargée."); }
+async function ficheInto(pdf,d){
+  const {StandardFonts,rgb}=PDFLib;
   const f=await pdf.embedFont(StandardFonts.Helvetica), fb=await pdf.embedFont(StandardFonts.HelveticaBold), T=pdfTxt;
   const mm=v=>v*2.8346, ink=rgb(.1,.12,.15), grey=rgb(.35,.38,.42), red=rgb(.78,.06,.18), green=rgb(.06,.48,.24);
   let pg, y; const W=595.28, H=841.89;
@@ -190,15 +204,28 @@ async function fichePdf(d){
   kv("Accueil renforcé",(d.rq??"-")+"/10 aux questions sur les 3 risques majeurs · partie pratique sur le terrain avec le chef d'équipe"); kv("Risques majeurs du poste",(d.risques||[]).join(", ")||"-");
   sec("3. Parrain tuteur (MASE 2.2.1)"); kv("Parrain désigné",d.parrain?.nom?d.parrain.nom+(d.parrain.email?" · "+d.parrain.email:""):"Non désigné", d.parrain?.nom?null:red); if(d.parrain?.pourquoi) kv("Pourquoi ce parrain",d.parrain.pourquoi);
   CRIT.forEach(([k,l])=>kv(l, d.parrain?.[k]?"Oui":"Non renseigné", d.parrain?.[k]?green:red));
-  sec("4. Suivi et communication"); STEPS.forEach(st=>{ const s=(d.steps||{})[st.k]||{}; kv(st.l, s.doneAt?"Répondu le "+fmt(s.doneAt)+(s.sentAt?" (envoyé le "+fmt(s.sentAt)+")":""):s.sentAt?"Envoyé le "+fmt(s.sentAt)+(st.form?", en attente de réponse":""):"Non envoyé", s.doneAt||(!st.form&&s.sentAt)?green:null); });
+  { const a=(d.steps||{}).ack||{}; kv("Missions confirmées", a.doneAt?"Oui, par "+(a.answers?.signataire||"le parrain")+" le "+fmt(a.doneAt):"Pas encore", a.doneAt?green:red); }
+  const sigImg=async(label,data)=>{ if(!data) return; need(mm(30)); pg.drawText(T(label),{x:mm(18),y,size:9,font:f,color:grey}); const im=await pdf.embedPng(data); const w=mm(55), h=w*im.height/im.width; pg.drawRectangle({x:mm(78),y:y-h+mm(3),width:w,height:h,borderColor:rgb(.8,.82,.85),borderWidth:.8}); pg.drawImage(im,{x:mm(78),y:y-h+mm(3),width:w,height:h}); y-=h+mm(4); };
+  sec("Accueil au poste (MASE 2.2.2 · accueil renforcé)"); const tr=d.terrain;
+  if(!tr?.doneAt) kv("Statut","Pas encore réalisé", red); else {
+    kv("Réalisé le",fmt(tr.date+"T12:00:00")+" avec "+(tr.chef||"-"));
+    T_VISITE.forEach(([k,l])=>kv(l,tr.visite?.[k]||"-", tr.visite?.[k]==="Pas fait"?red:null));
+    kv("EPI remis",[...(tr.epi||[]),tr.epiAutre].filter(Boolean).join(", ")||"-");
+    (d.formations||[]).forEach((fm,i)=>kv(fm,tr.forms?.[i]||"-"));
+    (d.prat&&d.prat.length?d.prat:(d.risques||[])).forEach((p,i)=>kv(p,tr.prat?.[i]||"-", tr.prat?.[i]==="À revoir"?red:green));
+    if(d.rq!=null&&d.rq<5) kv("Reprise des risques majeurs",tr.reprise?"Faite":"Non faite", tr.reprise?green:red);
+    if(tr.obs) kv("Observations",tr.obs);
+    await sigImg("Signature de l'arrivant",tr.sigArrivant); await sigImg("Signature chef d'équipe / SSE",tr.sigResp);
+  }
+  if(d.finMission){ sec("Fin de mission"); kv("Date de fin de mission",fmt(d.finMission+"T12:00:00")); }
+  sec("4. Suivi et communication"); STEPS.filter(st=>!st.local&&!st.nomail).forEach(st=>{ const s=(d.steps||{})[st.k]||{}; kv(st.l, s.doneAt?"Répondu le "+fmt(s.doneAt)+(s.sentAt?" (envoyé le "+fmt(s.sentAt)+")":""):s.sentAt?"Envoyé le "+fmt(s.sentAt)+(st.form?", en attente de réponse":""):"Non envoyé", s.doneAt||(!st.form&&s.sentAt)?green:null); });
   const block=(k,title)=>{ const s=(d.steps||{})[k]||{}, a=s.answers; sec(title); if(!a){ kv("Statut","Pas encore de réponse"); return; } Object.entries(a).filter(([x,v])=>LABELS[x]&&v!=="").forEach(([x,v])=>kv(LABELS[x], STAR_KEYS.includes(x)?stars(v):v)); kv("Date",fmt(s.doneAt)); return s; };
-  const p1=block("p1m","5. Évaluation par le parrain à 1 mois (MASE 2.2.1.9 · 2.3)");
+  const p1=block("p1m",(d.finMission?"5. Évaluation de fin de mission":"5. Évaluation par le parrain à 1 mois")+" (MASE 2.2.1.9 · 2.3)");
   if(p1&&p1.signature){ need(mm(34)); pg.drawText("Signature du parrain",{x:mm(18),y,size:9,font:f,color:grey}); const im=await pdf.embedPng(p1.signature); const w=mm(60), h=w*im.height/im.width; pg.drawRectangle({x:mm(78),y:y-h+mm(3),width:w,height:h,borderColor:rgb(.8,.82,.85),borderWidth:.8}); pg.drawImage(im,{x:mm(78),y:y-h+mm(3),width:w,height:h}); y-=h+mm(4); }
   kv("Fin de parrainage", d.finParrainage?"Actée le "+fmt(d.finParrainage):"Non actée", d.finParrainage?green:red);
   block("q1m","6. Retour de l'arrivant à 1 mois"); block("q3m","7. Expérience à 3 mois");
   if(d.notes){ sec("Notes du service SSE"); kv("Notes",d.notes); }
   need(mm(10)); y-=mm(4); pg.drawText(T(`Fiche générée le ${new Date().toLocaleString("fr-FR")} depuis l'espace SSE CICR Verdon.`),{x:mm(16),y,size:8,font:f,color:grey});
-  const out=await pdf.save(); download(new Blob([out],{type:"application/pdf"}),`Fiche_suivi_${d.nom}_${d.prenom}.pdf`); toast("Fiche de suivi téléchargée.");
 }
 async function copyHtml(btn){
   const P=S.mailPrev; if(!P) return;
@@ -263,7 +290,7 @@ function render(){
 function vTodo(){
   const T=tasks(), act=T.filter(t=>t.cls!=="t-soon"), soon=T.filter(t=>t.cls==="t-soon");
   const row=t=>`<div class="task ${t.cls}"><div class="when"><b>${t.when}</b>${t.date?fmt(t.date):""}</div><div class="what"><b>${t.l}</b><span>${esc(t.sub)}</span></div>
-    <div>${t.recu?`<button class="btn small" data-recu="${t.recu.id}">Traiter</button>`:t.k==="parrain"?`<button class="btn small" data-open="${t.d.id}">Désigner</button>`:`<button class="btn small" data-mail="${t.d.id}:${t.k}"><span class="dot"></span>Préparer le mail</button>`}</div></div>`;
+    <div>${t.recu?`<button class="btn small" data-recu="${t.recu.id}">Traiter</button>`:t.k==="terrain"?`<button class="btn small" data-terrain="${t.d.id}"><span class="dot"></span>Remplir</button>`:t.k==="parrain"?`<button class="btn small" data-open="${t.d.id}">Désigner</button>`:`<button class="btn small" data-mail="${t.d.id}:${t.k}"><span class="dot"></span>Préparer le mail</button>`}</div></div>`;
   return `<div class="head"><div><p class="eyebrow">Tableau de bord</p><h2>À faire</h2></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn ghost" data-act="fetch" ${S.fetching?"disabled":""}>${S.fetching?"Actualisation…":"Actualiser"}</button></div></div>
     ${S.mailOk?`<div class="callout good" style="margin-bottom:12px"><span><b>Envoi automatique activé.</b> Dès que vous désignez un parrain, l'arrivant et le parrain reçoivent leur mail. Les questionnaires partent seuls à 1 mois et à 3 mois. Seuls les échecs d'envoi apparaissent ici.</span></div>`:`<div class="callout info" style="margin-bottom:12px"><span><b>Vos mails sont prêts à envoyer depuis Outlook.</b> Un point rouge vous prévient dès qu'un mail est à envoyer : bienvenue et parrain dès la désignation, questionnaires à 1 mois, puis à 3 mois. Cliquez sur « Préparer le mail », collez-le dans Outlook, puis « Marquer comme envoyé ».</span></div>`}
@@ -273,11 +300,11 @@ function vTodo(){
     ${soon.length?`<p class="sec-h">Dans les 7 prochains jours</p><div class="tasks">${soon.map(row).join("")}</div>`:""}`;
 }
 function chips(d){
-  return STEPS.map(st=>{ const r=stepState(d,st); const c=r.state==="ok"?"ok":r.state==="late"?"late":["now","soon","wait"].includes(r.state)?"due":""; const short={mailArrivant:"Bienvenue",mailParrain:"Parrain",q1m:"1 mois",p1m:"Bilan parrain",q3m:"3 mois"}[st.k]; return `<span class="chip ${c}">${short}${r.state==="ok"?" ✓":r.state==="wait"?" envoyé":""}</span>`; }).join("");
+  return STEPS.map(st=>{ const r=stepState(d,st); const c=r.state==="ok"?"ok":r.state==="late"?"late":["now","soon","wait"].includes(r.state)?"due":""; const short={mailArrivant:"Bienvenue",mailParrain:"Parrain",ack:"Missions",terrain:"Au poste",q1m:"1 mois",p1m:"Bilan parrain",q3m:"3 mois"}[st.k]; return `<span class="chip ${c}">${short}${r.state==="ok"?" ✓":r.state==="wait"?" envoyé":""}</span>`; }).join("");
 }
 function vDossiers(){
   const L=[...S.dossiers].sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  return `<div class="head"><div><p class="eyebrow">${L.length} dossier${L.length>1?"s":""}</p><h2>Arrivants</h2></div><button class="btn" data-tab="import">Basculer une attestation</button></div>
+  return `<div class="head"><div><p class="eyebrow">${L.length} dossier${L.length>1?"s":""}</p><h2>Arrivants</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-act="exportAll" ${L.length?"":"disabled"}>Tout exporter (PDF)</button><button class="btn" data-tab="import">Basculer une attestation</button></div></div>
   ${!L.length?`<div class="empty"><b>Aucun dossier.</b><span>Les dossiers sont créés quand vous basculez une attestation.</span></div>`:
   `<div class="tbl"><table><thead><tr><th>Arrivant</th><th>Poste</th><th>Statut</th><th>Arrivée</th><th>Parrain tuteur</th><th>Suivi</th></tr></thead><tbody>
   ${L.map(d=>`<tr class="click" data-open="${d.id}"><td><b>${esc(fullName(d))}</b><br><span class="hint">${esc(d.emailPerso||"")}</span></td><td>${esc(d.posteLabel||"")}</td><td>${esc(d.statut||"")}${d.agence?`<br><span class="hint">${esc(d.agence)}</span>`:""}</td><td>${fmt(d.date?d.date+"T12:00:00":"")}</td><td>${d.parrain?.nom?esc(d.parrain.nom):`<span class="chip late">À désigner</span>`}</td><td>${chips(d)}</td></tr>`).join("")}
@@ -350,11 +377,51 @@ function vDetail(d){
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="saveD">Enregistrer les modifications</button><button class="btn ghost" data-act="fiche">Télécharger la fiche de suivi (PDF)</button></div>
       <div><p class="lbl" style="margin-bottom:6px">Suivi</p><div class="timeline">${STEPS.map(st=>{ const r=stepState(d,st), s=r.s||{}; const c=r.state==="ok"?"ok":r.state==="late"?"late":["now","soon","wait"].includes(r.state)?"due":"";
         return `<div><div class="tl ${c}"><i></i><span><b>${st.l}</b><br><span class="hint">${s.error&&!s.sentAt?`<span style="color:var(--bad)">Échec d'envoi : ${esc(s.error)}</span>`:r.state==="ok"?(st.form?`Répondu le ${fmt(s.doneAt)}`:`${s.auto?"Envoyé automatiquement":"Envoyé"} le ${fmt(s.sentAt)}`):r.state==="wait"?`Envoyé le ${fmt(s.sentAt)}, en attente de réponse`:r.state==="blocked"?"Désignez d'abord le parrain":`${S.mailOk?"Envoi automatique le":"Prévu le"} ${fmt(r.due)}`}</span></span>
-          <span>${r.state==="blocked"?"":`<button class="btn ghost small" data-mail="${d.id}:${st.k}">${r.state==="ok"&&!st.form?"Revoir":"Mail"}</button>`}</span></div>${st.form?ans(st.k):""}</div>`; }).join("")}</div></div>
+          <span>${st.local?`<button class="btn ${r.state==="ok"?"ghost":""} small" data-terrain="${d.id}">${r.state==="ok"?"Voir / modifier":"Remplir"}</button>`:st.nomail?"":r.state==="blocked"?"":`<button class="btn ghost small" data-mail="${d.id}:${st.k}">${r.state==="ok"&&!st.form?"Revoir":"Mail"}</button>`}</span></div>${st.form&&!st.nomail?ans(st.k):""}${st.local&&d.terrain?.doneAt?`<p class="hint" style="margin:4px 0 0 26px">Avec ${esc(d.terrain.chef||"—")} · ${(d.terrain.epi||[]).length} EPI remis${d.terrain.reprise?" · reprise des risques majeurs faite":""}</p>`:""}${st.nomail&&s.doneAt?`<p class="hint" style="margin:4px 0 0 26px">Confirmé par ${esc(s.answers?.signataire||"")} le ${fmt(s.doneAt)}</p>`:""}</div>`; }).join("")}</div></div>
+      <div class="panel" style="padding:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">${d.finMission?`<span><b>Fin de mission le ${fmt(d.finMission+"T12:00:00")}</b> · l'évaluation du parrain et le questionnaire arrivant sont à envoyer maintenant.</span><button class="btn ghost small" data-act="unFin">Annuler</button>`:`<span class="hint">Mission courte ? Déclenchez l'évaluation du parrain et le questionnaire de l'arrivant sans attendre 1 mois.</span><input type="date" id="finDate" value="${new Date().toISOString().slice(0,10)}" style="width:auto"><button class="btn small" data-act="finMission">Fin de mission</button>`}</div>
       ${d.finParrainage?`<div class="callout good"><span>Fin de la période d'accompagnement actée le ${fmt(d.finParrainage)} (MASE 2.2.1.9).</span></div>`:""}
       <div style="border-top:1px solid var(--line);padding-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${S.confirmDel===d.id?`<span class="hint">Supprimer définitivement ce dossier ?</span><button class="btn danger small" data-act="delD">Oui, supprimer</button><button class="btn ghost small" data-act="noDel">Annuler</button>`:`<button class="btn ghost small" data-act="askDel">Supprimer le dossier</button>`}</div>
     </div></div></div>`;
 }
+const T_VISITE=[["visite","Visite du site : issues de secours, extincteurs, point de rassemblement, zone fumeur"],["equipe","Présentation de l'équipe, du chef d'équipe et du parrain tuteur"],["poste","Présentation du poste, des modes opératoires et des fiches machines"],["circulation","Règles de circulation et zones balisées rappelées"],["urgence","Numéro d'urgence et conduite à tenir en cas d'accident communiqués"],["pdp","PDP / PPSPS présenté et signé (chantier client)",true]];
+const T_EPI=["Tenue de travail","Chaussures de sécurité","Casque à jugulaire","Lunettes de protection","Gants adaptés","Protections auditives","Gilet haute visibilité","Masque / protection respiratoire","Masque de soudage","Harnais"];
+function terrainDraft(d){ const t=JSON.parse(JSON.stringify(d.terrain||{})); t.visite=t.visite||{}; t.epi=t.epi||[]; t.prat=t.prat||{}; t.forms=t.forms||{}; t.date=t.date||new Date().toISOString().slice(0,10); return t; }
+function vTerrain(d){
+  const t=S.terr, prat=(d.prat&&d.prat.length?d.prat:(d.risques||[]).map(r=>r+" : mise en pratique au poste")), low=d.rq!=null&&d.rq<5;
+  const seg2=(k,v,opts)=>`<div class="seg">${opts.map(o=>`<button type="button" data-tseg="${k}" data-v="${esc(o)}" aria-pressed="${v===o}">${esc(o)}</button>`).join("")}</div>`;
+  return `<div class="sheet-bg" data-close><div class="sheet wide" role="dialog" aria-modal="true" aria-labelledby="tt">
+    <div class="sh"><div><span class="eyebrow">${esc(fullName(d))} · ${esc(d.posteLabel||"")}</span><h3 id="tt">Accueil au poste</h3></div><button class="x" data-close aria-label="Fermer">✕</button></div>
+    <div class="sb tform">
+      <p class="hint" style="margin:0">À remplir ici, sur l'ordinateur, avec l'arrivant, le jour de son arrivée. Remplace la page 2 papier de l'attestation (MASE 2.2.2 et accueil renforcé).</p>
+      <div class="grid2"><div class="field"><label>Date</label><input type="date" data-tf="date" value="${esc(t.date)}"></div><div class="field"><label>Chef d'équipe / encadrant présent</label><input data-tf="chef" value="${esc(t.chef||"")}" placeholder="Prénom Nom"></div></div>
+      <fieldset><legend>1. Visite et présentation</legend>${T_VISITE.map(([k,l,na])=>`<div class="trow"><span>${l}</span>${seg2("visite."+k,t.visite[k],na?["Fait","Sans objet"]:["Fait","Pas fait"])}</div>`).join("")}</fieldset>
+      <fieldset><legend>2. EPI remis</legend><div class="tchecks">${T_EPI.map(e=>`<label><input type="checkbox" data-tepi="${esc(e)}" ${t.epi.includes(e)?"checked":""}> ${e}</label>`).join("")}</div><input data-tf="epiAutre" value="${esc(t.epiAutre||"")}" placeholder="Autre EPI remis (facultatif)" style="margin-top:8px"></fieldset>
+      ${(d.formations||[]).length?`<fieldset><legend>3. Formations et habilitations déclarées</legend>${d.formations.map((f,i)=>`<div class="trow"><span>${esc(f)}</span>${seg2("forms."+i,t.forms[i],d.statut&&/int[ée]rim/i.test(d.statut)?["Justificatif vu","À demander à l'agence"]:["Justificatif vu","À fournir"])}</div>`).join("")}</fieldset>`:""}
+      <fieldset><legend>${(d.formations||[]).length?4:3}. Accueil renforcé : partie pratique</legend>
+        <p class="hint" style="margin:0 0 6px">Partie théorique faite en ligne : ${d.rq??"—"}/10. Risques majeurs : ${esc((d.risques||[]).join(", ")||"—")}.</p>
+        ${low?`<div class="callout warn" style="margin-bottom:8px"><span><b>Note théorique inférieure à 5/10 : reprise obligatoire.</b> Reprenez avec lui ou elle les 3 risques majeurs avant la mise au poste.</span></div><label class="tcheck"><input type="checkbox" data-tf-check="reprise" ${t.reprise?"checked":""}> Les 3 risques majeurs ont été repris avec l'arrivant</label>`:""}
+        ${prat.map((p,i)=>`<div class="trow"><span>${esc(p)}</span>${seg2("prat."+i,t.prat[i],["Acquis","À revoir"])}</div>`).join("")}</fieldset>
+      <div class="field"><label>Observations (facultatif)</label><textarea data-tf="obs">${esc(t.obs||"")}</textarea></div>
+      <div class="grid2">
+        <div><p class="lbl">Signature de l'arrivant</p><div class="sig-wrap tsig"><canvas data-tsig="sigArrivant"></canvas><span class="ph" ${t.sigArrivant?"hidden":""}>${esc(fullName(d))}</span></div><button class="btn ghost small" data-tsigclear="sigArrivant" style="margin-top:6px">Effacer</button></div>
+        <div><p class="lbl">Signature du chef d'équipe ou du SSE</p><div class="sig-wrap tsig"><canvas data-tsig="sigResp"></canvas><span class="ph" ${t.sigResp?"hidden":""}>Signez ici</span></div><button class="btn ghost small" data-tsigclear="sigResp" style="margin-top:6px">Effacer</button></div>
+      </div>
+      <p class="err" id="terr" style="margin:0"></p>
+      <div><button class="btn good" data-act="saveTerrain">Enregistrer l'accueil au poste</button></div>
+    </div></div></div>`;
+}
+function setupTSig(){
+  document.querySelectorAll("canvas[data-tsig]").forEach(c=>{ const key=c.dataset.tsig;
+    const r=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1; c.width=r.width*dpr; c.height=r.height*dpr;
+    const x=c.getContext("2d"); x.scale(dpr,dpr); x.lineWidth=2.4; x.lineCap="round"; x.lineJoin="round"; x.strokeStyle="#1b2a6b";
+    if(S.terr[key]){ const im=new Image(); im.onload=()=>x.drawImage(im,0,0,r.width,r.height); im.src=S.terr[key]; }
+    let dr=false,mv=false; const pos=e=>{const b=c.getBoundingClientRect(); return [e.clientX-b.left,e.clientY-b.top];};
+    c.addEventListener("pointerdown",e=>{dr=true;mv=false;c.setPointerCapture(e.pointerId);const[a,b]=pos(e);x.beginPath();x.moveTo(a,b);});
+    c.addEventListener("pointermove",e=>{if(!dr)return;const[a,b]=pos(e);x.lineTo(a,b);x.stroke();mv=true;c.nextElementSibling.hidden=true;});
+    const end=()=>{ if(!dr) return; dr=false; if(mv){ const o=document.createElement("canvas"); o.width=600; o.height=Math.round(600*r.height/r.width); o.getContext("2d").drawImage(c,0,0,o.width,o.height); S.terr[key]=o.toDataURL("image/png"); } };
+    c.addEventListener("pointerup",end); c.addEventListener("pointercancel",end); });
+}
+function openTerrain(id){ const d=S.dossiers.find(x=>x.id===id); if(!d) return; S.open=id; S.terr=terrainDraft(d); $("#sheet").innerHTML=vTerrain(d); setupTSig(); }
 function vMail(d,k){
   const P=S.mailPrev, st=STEPS.find(x=>x.k===k), s=(d.steps||{})[k]||{};
   const head=`<div class="sh"><div><span class="eyebrow">${esc(fullName(d))}</span><h3 id="mt">${st.l}</h3></div><button class="x" data-close aria-label="Fermer">✕</button></div>`;
@@ -426,8 +493,8 @@ async function createDossier(){
   if(!d.prenom||!d.nom){ toast("Renseignez au moins le prénom et le nom."); return false; }
   const id=(d.nom+"-"+d.prenom+"-"+(d.date||"")).toLowerCase().normalize("NFD").replace(/[^\w-]+/g,"").slice(0,60)+"-"+tok().slice(0,6);
   const dos={id, nom:d.nom, prenom:d.prenom, emailPerso:d.emailPerso||"", statut:d.statut||"", agence:d.agence||"", poste:d.poste||"autre", posteLabel:d.posteLabel||POSTES[d.poste]||"", date:d.date||new Date().toISOString().slice(0,10), lieux:d.lieux||[], quiz:d.quiz??null, tentatives:d.tentatives??null, renforcee:!!d.renforcee,
-    parrain:I.parrain?.nom?{nom:I.parrain.nom,email:I.parrain.email||"",pourquoi:I.parrain.pourquoi||"",...critOf(S.parrains.find(x=>x.nom===I.parrain.nom)||I.parrain)}:null, recuId:I.fromRecu||null, risques:d.risques||[], rq:d.rq??null, chantier:d.chantier||"", validated:S.decision, validatedAt:new Date().toISOString(), createdAt:new Date().toISOString(), notes:"",
-    steps:{mailArrivant:{},mailParrain:{},q1m:{token:tok()},p1m:{token:tok()},q3m:{token:tok()}}};
+    parrain:I.parrain?.nom?{nom:I.parrain.nom,email:I.parrain.email||"",pourquoi:I.parrain.pourquoi||"",...critOf(S.parrains.find(x=>x.nom===I.parrain.nom)||I.parrain)}:null, recuId:I.fromRecu||null, risques:d.risques||[], prat:d.prat||[], formations:d.formations||[], rq:d.rq??null, chantier:d.chantier||"", validated:S.decision, validatedAt:new Date().toISOString(), createdAt:new Date().toISOString(), notes:"",
+    steps:{mailArrivant:{},mailParrain:{},q1m:{token:tok()},p1m:{token:tok()},q3m:{token:tok()},ack:{token:tok()}}};
   try{ await saveDossier(dos);
     if(I.fromRecu){ try{ await deleteRecu(I.fromRecu,false); }catch(_){} }
     toast("Dossier créé."); return true; }catch(e){ toast(e.code==="auth"?"Session expirée : reconnectez-vous puis recommencez.":"Le dossier n'a pas pu être enregistré. Réessayez."); return false; }
@@ -447,6 +514,9 @@ document.addEventListener("click",async e=>{
   if(t.matches("[data-close]") && (e.target===t||t.tagName==="BUTTON")){ $("#sheet").innerHTML=""; S.open=null; S.mail=null; S.confirmDel=null; return; }
   if(t.dataset.tab){ S.tab=t.dataset.tab; render(); return; }
   if(t.dataset.recu){ const r=S.recus.find(x=>x.id===t.dataset.recu); if(r) openRecu(r); return; }
+  if(t.dataset.terrain){ openTerrain(t.dataset.terrain); return; }
+  if(t.dataset.tseg){ const [g,k]=t.dataset.tseg.split("."); S.terr[g][k]=t.dataset.v; t.parentElement.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b===t)); return; }
+  if(t.dataset.tsigclear){ delete S.terr[t.dataset.tsigclear]; const d=S.dossiers.find(x=>x.id===S.open); $("#sheet").innerHTML=vTerrain(d); setupTSig(); return; }
   if(t.dataset.open){ S.open=t.dataset.open; $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===S.open)); return; }
   if(t.dataset.mail){ const [id,k]=t.dataset.mail.split(":"); openMail(id,k); return; }
   if(t.dataset.copy){ const v=(S.mailPrev||{})[t.dataset.copy]||""; try{ await navigator.clipboard.writeText(v); t.textContent="Copié"; }catch(_){ toast("Sélectionnez le texte et copiez-le avec Ctrl+C."); } return; }
@@ -457,6 +527,16 @@ document.addEventListener("click",async e=>{
   if(a==="dlrecu"){ if(S.imp?.bytes) download(new Blob([S.imp.bytes],{type:"application/pdf"}),S.imp.name); return; }
   if(a==="logout"){ try{ sessionStorage.removeItem("sse_tok"); }catch(_){ } TOKEN=null; clearInterval(window.__poll); showLock(false); return; }
   if(a==="copyHtml") return copyHtml(t);
+  if(a==="saveTerrain"){ const d=JSON.parse(JSON.stringify(S.dossiers.find(x=>x.id===S.open))), T=S.terr, e=$("#terr");
+    document.querySelectorAll("[data-tf]").forEach(i=>T[i.dataset.tf]=i.value.trim()); document.querySelectorAll("[data-tf-check]").forEach(i=>T[i.dataset.tfCheck]=i.checked); T.epi=[...document.querySelectorAll("[data-tepi]:checked")].map(i=>i.dataset.tepi);
+    const miss=[]; if(!T.chef) miss.push("le nom du chef d'équipe"); if(T_VISITE.some(([k])=>!T.visite[k])) miss.push("toutes les lignes de la visite"); if(!T.epi.length&&!T.epiAutre) miss.push("les EPI remis");
+    const prat=(d.prat&&d.prat.length?d.prat:(d.risques||[])); if(prat.some((_,i)=>!T.prat[i])) miss.push("la partie pratique"); if(d.rq!=null&&d.rq<5&&!T.reprise) miss.push("la reprise des risques majeurs");
+    if(!T.sigArrivant||!T.sigResp) miss.push("les deux signatures");
+    if(miss.length){ e.textContent="À compléter : "+miss.join(", ")+"."; e.scrollIntoView({block:"center"}); return; }
+    T.doneAt=new Date().toISOString(); d.terrain=T; try{ await saveDossier(d); toast("Accueil au poste enregistré."); $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===d.id)); }catch(_){ e.textContent="L'enregistrement a échoué. Réessayez."; } return; }
+  if(a==="finMission"){ const d=JSON.parse(JSON.stringify(S.dossiers.find(x=>x.id===S.open))); d.finMission=$("#finDate").value||new Date().toISOString().slice(0,10); await saveDossier(d); toast("Fin de mission enregistrée : les deux questionnaires sont à envoyer."); $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===d.id)); return; }
+  if(a==="unFin"){ const d=JSON.parse(JSON.stringify(S.dossiers.find(x=>x.id===S.open))); delete d.finMission; await saveDossier(d); $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===d.id)); return; }
+  if(a==="exportAll"){ t.disabled=true; t.textContent="Export…"; try{ const pdf=await PDFLib.PDFDocument.create(); const L=[...S.dossiers].sort((a,b)=>(a.date||"").localeCompare(b.date||"")); for(const d of L) await ficheInto(pdf,d); download(new Blob([await pdf.save()],{type:"application/pdf"}),`Export_suivi_integration_${new Date().toISOString().slice(0,10)}.pdf`); toast(`${L.length} fiche(s) exportée(s).`); }catch(err){ console.error(err); toast("L'export a échoué."); } t.disabled=false; t.textContent="Tout exporter (PDF)"; return; }
   if(a==="eml"){ const P=S.mailPrev, d=S.dossiers.find(x=>x.id===S.mail.id); if(!P) return; download(new Blob([emlOf(P)],{type:"message/rfc822"}), `Mail_${(STEPS.find(x=>x.k===S.mail.k)||{}).k}_${d.nom}_${d.prenom}.eml`); toast("Ouvrez le fichier téléchargé : le mail s'ouvre dans Outlook, prêt à envoyer."); return; }
   if(a==="fiche"){ try{ await fichePdf(S.dossiers.find(x=>x.id===S.open)); }catch(e){ console.error(e); toast("La fiche n'a pas pu être générée."); } return; }
   if(a==="sendNow"){ t.disabled=true; t.textContent="Envoi…"; try{ const r=await fetch("/api/mail/"+encodeURIComponent(S.mail.id)+"/"+S.mail.k,{method:"POST",headers:{authorization:"Bearer "+TOKEN}}); const j=await r.json(); if(j.dossier){ const i=S.dossiers.findIndex(x=>x.id===j.dossier.id); if(i>=0) S.dossiers[i]=j.dossier; } toast(r.ok?"Mail envoyé.":"Échec : "+(j.error||r.status)); }catch(_){ toast("Envoi impossible."); } $("#sheet").innerHTML=""; S.mail=null; render(); return; }
