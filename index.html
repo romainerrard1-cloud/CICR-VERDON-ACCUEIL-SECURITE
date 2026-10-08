@@ -821,7 +821,7 @@ const EPIS = [
    ===================================================================== */
 const S = {
   step:0, maxStep:0,
-  id:{nom:"",prenom:"",emailPerso:"",statut:"",agence:"",motif:"",poste:"",posteAutre:"",date:"",lieux:[],chantier:"",mineur:"",permis:"",rgpd:false},
+  id:{nom:"",prenom:"",emailPerso:"",statut:"",agence:"",motif:"",poste:"",posteAutre:"",date:"",lieux:[],client:"",chantier:"",mineur:"",permis:"",rgpd:false},
   chap:0, slide:0, seen:{}, risksSeen:new Set(), chapDone:{},
   startedAt:null, courseDoneAt:null,
   quiz:{order:[], i:0, answers:[], attempts:0, best:null, passed:false, done:false}, touch:{}, rq:{}, formsExtra:[], renfExtra:[], formsDet:{},
@@ -945,7 +945,8 @@ function viewIdent(err){
         <div class="field"><label for="f-date">Date d'arrivée prévue</label><input id="f-date" type="date" data-f="date" value="${esc(d.date)}"></div>
         <div class="field" data-lieux><span class="lbl">Lieu de travail <small style="font-weight:400;color:var(--muted)">(plusieurs choix possibles)</small></span><div class="seg" role="group">${LIEUX.map(o=>`<button type="button" data-lieu="${esc(o)}" aria-pressed="${d.lieux.includes(o)}">${esc(o)}</button>`).join("")}</div></div>
         ${d.lieux.includes("Je ne sais pas")?`<div class="field full callout warn"><b>Vous ne savez pas encore où vous travaillerez ?</b><span>Merci de vous rendre à l'agence CICR à votre arrivée (275 rue Roger Duquenois, Cambronne-lès-Ribécourt), ou appelez l'accueil au 03 44 75 73 00 pour le savoir.</span></div>`:""}
-        ${d.lieux.includes("Chantier client")?`<div class="field full"><label for="f-chantier">Chantier ou client (si connu)</label><input id="f-chantier" data-f="chantier" value="${esc(d.chantier)}"></div>`:""}
+        ${d.lieux.includes("Chantier client")?`<div class="field full"><span class="lbl">Chez quel client ?</span>${seg("client",["Chanel","Sanofi","BASF Meaux","Autre client","Je ne sais pas encore"],d.client)}</div>
+        ${["Autre client","Je ne sais pas encore"].includes(d.client)||!d.client?`<div class="field full"><label for="f-chantier">Chantier ou client (si connu)</label><input id="f-chantier" data-f="chantier" value="${esc(d.chantier)}"></div>`:""}`:""}
         <div class="field"><span class="lbl">Avez-vous moins de 18 ans ?</span>${seg("mineur",["Non","Oui"],d.mineur)}</div>
         <div class="field"><span class="lbl">Permis de conduire valide ?</span>${seg("permis",["Oui","Non"],d.permis)}</div>
         ${d.mineur==="Oui"?`<div class="field full callout warn"><b>Vous avez moins de 18 ans : votre affectation doit être validée avant votre arrivée.</b><span>Certains travaux (machines dangereuses, hauteur, soudage, produits dangereux…) sont interdits aux mineurs. Une dérogation n'est possible que pour les jeunes en formation professionnelle (apprentis, stagiaires). Le responsable SSE vérifiera votre poste avec vous.</span></div>`:""}
@@ -1772,7 +1773,7 @@ const pdfTxt = s => String(s??"").replace(/[’‘]/g,"'").replace(/[“”«»]
 async function buildPdf(){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({unit:"mm",format:"a4"});
-  try{ const d0=S.id, pl={v:1,nom:d0.nom,prenom:d0.prenom,emailPerso:d0.emailPerso,statut:d0.statut,agence:d0.agence,motif:d0.motif,poste:d0.poste,posteLabel:posteLabel(),date:d0.date,lieux:d0.lieux,chantier:d0.chantier,mineur:d0.mineur,quiz:quizScore(),tentatives:S.quiz.attempts,renforcee:renforcee(),rq:rqNote(),risques:top3().map(k=>RISKS[k].t),prat:(poste()?.prat||[]).map(k=>PRAT[k]?PRAT[k][0]+" : "+PRAT[k][1]:k).concat(S.renfExtra||[]),formations:formsFor().filter(k=>S.forms[k]==="Oui").map(k=>FORMS[k].l+(S.formsDet[k]?" ("+S.formsDet[k]+")":"")).concat(S.formsExtra||[]),fin:S.finishedAt?S.finishedAt.toISOString():""};
+  try{ const d0=S.id, pl={v:1,nom:d0.nom,prenom:d0.prenom,emailPerso:d0.emailPerso,statut:d0.statut,agence:d0.agence,motif:d0.motif,poste:d0.poste,posteLabel:posteLabel(),date:d0.date,lieux:d0.lieux,client:d0.lieux.includes("Chantier client")?d0.client:"",chantier:d0.chantier,mineur:d0.mineur,quiz:quizScore(),tentatives:S.quiz.attempts,renforcee:renforcee(),rq:rqNote(),risques:top3().map(k=>RISKS[k].t),prat:(poste()?.prat||[]).map(k=>PRAT[k]?PRAT[k][0]+" : "+PRAT[k][1]:k).concat(S.renfExtra||[]),formations:formsFor().filter(k=>S.forms[k]==="Oui").map(k=>FORMS[k].l+(S.formsDet[k]?" ("+S.formsDet[k]+")":"")).concat(S.formsExtra||[]),fin:S.finishedAt?S.finishedAt.toISOString():""};
     doc.setProperties({title:"Attestation accueil sécurité CICR Verdon", subject:"CICRACCUEIL1:"+btoa(unescape(encodeURIComponent(JSON.stringify(pl))))}); }catch(_){ }
   const W=210, M=16; let y=0;
   const T=(s,x,yy,o)=>doc.text(pdfTxt(s),x,yy,o);
@@ -1844,7 +1845,7 @@ async function sendToSSE(){
   try{
     const doc=await buildPdf(); const blob=doc.output("blob"); const d=S.id;
     const name=pdfTxt(`Attestation-accueil-securite_${d.nom}_${d.prenom}_${(d.date||"").replace(/-/g,"")}.pdf`).replace(/[^\w.\-]+/g,"_");
-    const pl={v:1,nom:d.nom,prenom:d.prenom,emailPerso:d.emailPerso,statut:d.statut,agence:d.agence,motif:d.motif,poste:d.poste,posteLabel:posteLabel(),date:d.date,lieux:d.lieux,chantier:d.chantier,mineur:d.mineur,quiz:quizScore(),tentatives:S.quiz.attempts,renforcee:renforcee(),rq:rqNote(),risques:top3().map(k=>RISKS[k].t),prat:(poste()?.prat||[]).map(k=>PRAT[k]?PRAT[k][0]+" : "+PRAT[k][1]:k).concat(S.renfExtra||[]),formations:formsFor().filter(k=>S.forms[k]==="Oui").map(k=>FORMS[k].l+(S.formsDet[k]?" ("+S.formsDet[k]+")":"")).concat(S.formsExtra||[]),fin:S.finishedAt.toISOString()};
+    const pl={v:1,nom:d.nom,prenom:d.prenom,emailPerso:d.emailPerso,statut:d.statut,agence:d.agence,motif:d.motif,poste:d.poste,posteLabel:posteLabel(),date:d.date,lieux:d.lieux,client:d.lieux.includes("Chantier client")?d.client:"",chantier:d.chantier,mineur:d.mineur,quiz:quizScore(),tentatives:S.quiz.attempts,renforcee:renforcee(),rq:rqNote(),risques:top3().map(k=>RISKS[k].t),prat:(poste()?.prat||[]).map(k=>PRAT[k]?PRAT[k][0]+" : "+PRAT[k][1]:k).concat(S.renfExtra||[]),formations:formsFor().filter(k=>S.forms[k]==="Oui").map(k=>FORMS[k].l+(S.formsDet[k]?" ("+S.formsDet[k]+")":"")).concat(S.formsExtra||[]),fin:S.finishedAt.toISOString()};
     const fd=new FormData(); fd.append("payload",JSON.stringify(pl)); fd.append("attestation",new File([blob],name,{type:"application/pdf"}));
     const r=await fetch("/api/accueil",{method:"POST",body:fd}); if(!r.ok) throw new Error(r.status);
     S.sendState="ok";

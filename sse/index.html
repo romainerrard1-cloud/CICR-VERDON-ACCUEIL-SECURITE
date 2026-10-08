@@ -310,8 +310,31 @@ function vDossiers(){
   ${L.map(d=>`<tr class="click" data-open="${d.id}"><td><b>${esc(fullName(d))}</b><br><span class="hint">${esc(d.emailPerso||"")}</span></td><td>${esc(d.posteLabel||"")}</td><td>${esc(d.statut||"")}${d.agence?`<br><span class="hint">${esc(d.agence)}</span>`:""}</td><td>${fmt(d.date?d.date+"T12:00:00":"")}</td><td>${d.parrain?.nom?esc(d.parrain.nom):`<span class="chip late">À désigner</span>`}</td><td>${chips(d)}</td></tr>`).join("")}
   </tbody></table></div>`}`;
 }
-function parrainOptions(sel){ return `<option value="">— Choisir dans la liste —</option>`+S.parrains.map((p,i)=>`<option value="${i}" ${sel===p.nom?"selected":""}>${esc(p.nom)} · ${esc(POSTES[p.poste]||"Tous postes")}</option>`).join(""); }
-function autoParrain(poste){ return S.parrains.find(p=>p.poste===poste) || S.parrains.find(p=>p.poste==="tous") || null; }
+function parrainOptions(sel){ return `<option value="">— Choisir dans la liste —</option>`+S.parrains.map((p,i)=>`<option value="${i}" ${sel===p.nom?"selected":""}>${esc(p.nom)} · ${esc((SITES.find(x=>x[0]===(p.site||"atelier"))||[])[1]||"")} · ${esc(FAM_L[famOf(p)]||"")}</option>`).join(""); }
+const FAMILLE = {soudeur:"terrain",tuyauteur:"terrain",chaudronnier:"terrain",monteur:"terrain",encadrant:"terrain",qc:"terrain",autre:"terrain",logisticien:"logistique",dessinateur:"support",bureau:"support"};
+const FAM_L = {terrain:"Personnel terrain",logistique:"Logistique",support:"Fonction support",tous:"Toutes fonctions"};
+const SITES = [["atelier","Atelier de Cambronne"],["Chanel","Chanel"],["Sanofi","Sanofi"],["BASF Meaux","BASF Meaux"],["tous","Tous lieux"]];
+function siteOf(d){ const l=d?.lieux||[]; if(l.includes("Chantier client") && ["Chanel","Sanofi","BASF Meaux"].includes(d.client)) return d.client; return "atelier"; }
+function famOf(p){ return p.famille || (p.poste && p.poste!=="tous" ? FAMILLE[p.poste] : "tous"); }
+/* Chantier client connu : le référent du site. Sinon, à l'atelier : selon la famille du poste. */
+function candidats(d){
+  const data = typeof d==="string" ? {poste:d} : (d||{}); const site=siteOf(data), fam=FAMILLE[data.poste]||"terrain";
+  const siteP = p => (p.site||"atelier")===site || p.site==="tous";
+  const L = S.parrains.filter(p=>p.nom);
+  if(site!=="atelier"){ const c=L.filter(p=>p.site===site); if(c.length) return c; }
+  return [...L.filter(p=>siteP(p)&&p.poste===data.poste), ...L.filter(p=>siteP(p)&&!p.poste&&famOf(p)===fam), ...L.filter(p=>siteP(p)&&famOf(p)==="tous")].filter((p,i,a)=>a.indexOf(p)===i);
+}
+function autoParrain(d){ return candidats(d)[0] || null; }
+const PARRAINS_CICR = [
+ {nom:"Brahim Bassine", email:"BBassine@groupe-verdon.com", site:"atelier", famille:"terrain", pourquoi:"Responsable de l'atelier et du personnel atelier, il a le plus d'expérience dans nos métiers (soudage, tuyauterie, chaudronnerie). Présent tous les jours à l'atelier et toujours accessible, il montre les bons gestes et les modes opératoires, et veille au respect des consignes de sécurité et au port des EPI."},
+ {nom:"Christophe Perrin", email:"", site:"atelier", famille:"logistique", pourquoi:"Responsable logistique, il maîtrise le magasin, les flux, la manutention, le levage et la conduite d'engins. Il transmet les règles de circulation, d'arrimage et de conduite, qui sont les risques majeurs des postes logistiques, et organise le travail au quotidien."},
+ {nom:"Laura Ducoin", email:"LDucoin@groupe-verdon.com", site:"atelier", famille:"support", pourquoi:"HR Business Partner, elle connaît l'organisation de l'entreprise, ses interlocuteurs et ses règles. Elle accompagne l'intégration des fonctions support, répond aux questions sur les droits et démarches des salariés et intérimaires, et fait le lien avec la santé au travail."},
+ {nom:"Fabien Pontus", email:"", site:"atelier", famille:"support", pourquoi:"Directeur de CICR, il connaît l'entreprise, son organisation, ses clients et ses projets mieux que personne. Signataire de la politique SSE, il porte le niveau d'exigence de l'entreprise en sécurité et accompagne l'intégration de l'encadrement et des fonctions support."},
+ {nom:"Romain Errard", email:"rerrard@groupe-verdon.com", site:"atelier", famille:"support", pourquoi:"Responsable SSE, il connaît l'ensemble des risques, des règles et des consignes de l'entreprise, anime l'accueil sécurité et la démarche MASE. Il est le référent naturel des fonctions support pour toute question de santé, de sécurité et d'environnement."},
+ {nom:"Yvonnick Boulen", email:"", site:"Chanel", famille:"tous", pourquoi:"Conducteur de travaux sur le site Chanel, il connaît les règles du client, son plan de prévention, ses accès et ses exigences de sécurité. Présent sur le chantier, il organise le travail au quotidien et accueille les nouveaux arrivants sur place."},
+ {nom:"Ruben Nogueira", email:"", site:"Sanofi", famille:"tous", pourquoi:"Site Supervisor adjoint sur le site Sanofi, il connaît les règles du site pharmaceutique, les permis de travail, les zones à accès réglementé et les exigences du client. Présent sur place, il encadre les équipes et accompagne les nouveaux arrivants."},
+ {nom:"Christophe Leclerc", email:"", site:"BASF Meaux", famille:"tous", pourquoi:"Référent CICR sur le site BASF de Meaux, il connaît les règles du site chimique, les permis de travail et les consignes du client, ainsi que l'organisation du chantier. Présent sur place, il accompagne les nouveaux arrivants dans leurs premiers jours."}
+].map(p=>({...p, crit_entreprise:true, crit_technique:true, crit_sse:true, crit_pedago:true}));
 function vImport(){
   const I=S.imp;
   return `<div class="head"><div><p class="eyebrow">Accueil reçu par le site ou attestation PDF</p><h2>Basculer une attestation</h2></div></div>
@@ -342,12 +365,13 @@ function vImport(){
   </div>`;
 }
 function vParrains(){
-  return `<div class="head"><div><p class="eyebrow">${S.parrains.length} parrain${S.parrains.length>1?"s":""}</p><h2>Parrains tuteurs</h2></div><div style="display:flex;gap:8px"><button class="btn ghost" data-act="addP">Ajouter un parrain</button><button class="btn" data-act="saveP">Enregistrer</button></div></div>
-  <div class="callout info" style="margin-bottom:12px"><span>Le premier parrain trouvé pour le poste de l'arrivant est proposé automatiquement. Choisissez « Tous postes » pour un parrain par défaut. Cochez les 4 critères de désignation : ils sont exigés par le MASE et repris dans la fiche de suivi.</span></div>
-  <div class="panel">${S.parrains.length?`<div class="prow" style="font-weight:600;font-size:.8rem;color:var(--muted)"><span>Poste</span><span>Nom</span><span>Mail</span><span>Pourquoi ce parrain (compétences, expérience)</span><span></span></div>`:""}
-  ${S.parrains.map((p,i)=>`<div class="prow"><select data-p="${i}:poste"><option value="tous" ${p.poste==="tous"?"selected":""}>Tous postes</option>${Object.entries(POSTES).map(([k,l])=>`<option value="${k}" ${p.poste===k?"selected":""}>${l}</option>`).join("")}</select>
-    <input data-p="${i}:nom" value="${esc(p.nom)}" placeholder="Prénom Nom"><input data-p="${i}:email" value="${esc(p.email)}" placeholder="mail@groupe-verdon.com"><textarea data-p="${i}:pourquoi" placeholder="Ex. : 15 ans de tuyauterie inox, SST, exigeant sur la sécurité">${esc(p.pourquoi||"")}</textarea><button class="btn ghost small" data-delp="${i}">Retirer</button>
-    <div class="pcrit"><span class="hint">Critères de désignation (MASE 2.2.1) :</span>${CRIT.map(([k,l])=>`<label><input type="checkbox" data-p="${i}:${k}" ${p[k]?"checked":""}> ${l}</label>`).join("")}</div></div>`).join("") || `<div class="empty"><b>Aucun parrain enregistré.</b><span>Ajoutez vos parrains tuteurs et leur poste.</span></div>`}</div>`;
+  const missing=PARRAINS_CICR.filter(x=>!S.parrains.some(p=>p.nom.toLowerCase()===x.nom.toLowerCase())).length;
+  return `<div class="head"><div><p class="eyebrow">${S.parrains.length} parrain${S.parrains.length>1?"s":""}</p><h2>Parrains tuteurs</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap">${missing?`<button class="btn ghost" data-act="importP">Ajouter les parrains CICR (${missing})</button>`:""}<button class="btn ghost" data-act="addP">Ajouter un parrain</button><button class="btn" data-act="saveP">Enregistrer</button></div></div>
+  <div class="callout info" style="margin-bottom:12px"><span><b>Règle de désignation automatique :</b> sur un chantier client (Chanel, Sanofi, BASF Meaux), le référent du site. À l'atelier, selon le poste : personnel terrain, logistique ou fonction support. Si plusieurs parrains correspondent, le premier de la liste est proposé et vous pouvez en choisir un autre. Cochez les 4 critères MASE.</span></div>
+  <div class="panel">${S.parrains.length?`<div class="prow" style="font-weight:600;font-size:.8rem;color:var(--muted)"><span>Lieu et fonction</span><span>Nom</span><span>Mail</span><span>Pourquoi ce parrain (compétences, expérience)</span><span></span></div>`:""}
+  ${S.parrains.map((p,i)=>`<div class="prow"><div style="display:grid;gap:6px"><select data-p="${i}:site">${SITES.map(([k,l])=>`<option value="${k}" ${(p.site||"atelier")===k?"selected":""}>${l}</option>`).join("")}</select><select data-p="${i}:famille">${Object.entries(FAM_L).map(([k,l])=>`<option value="${k}" ${famOf(p)===k?"selected":""}>${l}</option>`).join("")}</select></div>
+    <input data-p="${i}:nom" value="${esc(p.nom)}" placeholder="Prénom Nom"><input data-p="${i}:email" value="${esc(p.email)}" placeholder="mail@groupe-verdon.com" ${p.email?"":'style="border-color:var(--bad)"'}><textarea data-p="${i}:pourquoi" placeholder="Ex. : 15 ans de tuyauterie inox, SST, exigeant sur la sécurité">${esc(p.pourquoi||"")}</textarea><button class="btn ghost small" data-delp="${i}">Retirer</button>
+    <div class="pcrit"><span class="hint">Critères de désignation (MASE 2.2.1) :</span>${CRIT.map(([k,l])=>`<label><input type="checkbox" data-p="${i}:${k}" ${p[k]?"checked":""}> ${l}</label>`).join("")}</div></div>`).join("") || `<div class="empty"><b>Aucun parrain enregistré.</b><span>Cliquez sur « Ajouter les parrains CICR ».</span></div>`}</div>`;
 }
 function vReglages(){
   const st=S.settings;
@@ -493,7 +517,7 @@ async function createDossier(){
   if(!d.prenom||!d.nom){ toast("Renseignez au moins le prénom et le nom."); return false; }
   const id=(d.nom+"-"+d.prenom+"-"+(d.date||"")).toLowerCase().normalize("NFD").replace(/[^\w-]+/g,"").slice(0,60)+"-"+tok().slice(0,6);
   const dos={id, nom:d.nom, prenom:d.prenom, emailPerso:d.emailPerso||"", statut:d.statut||"", agence:d.agence||"", poste:d.poste||"autre", posteLabel:d.posteLabel||POSTES[d.poste]||"", date:d.date||new Date().toISOString().slice(0,10), lieux:d.lieux||[], quiz:d.quiz??null, tentatives:d.tentatives??null, renforcee:!!d.renforcee,
-    parrain:I.parrain?.nom?{nom:I.parrain.nom,email:I.parrain.email||"",pourquoi:I.parrain.pourquoi||"",...critOf(S.parrains.find(x=>x.nom===I.parrain.nom)||I.parrain)}:null, recuId:I.fromRecu||null, risques:d.risques||[], prat:d.prat||[], formations:d.formations||[], rq:d.rq??null, chantier:d.chantier||"", validated:S.decision, validatedAt:new Date().toISOString(), createdAt:new Date().toISOString(), notes:"",
+    parrain:I.parrain?.nom?{nom:I.parrain.nom,email:I.parrain.email||"",pourquoi:I.parrain.pourquoi||"",...critOf(S.parrains.find(x=>x.nom===I.parrain.nom)||I.parrain)}:null, recuId:I.fromRecu||null, risques:d.risques||[], prat:d.prat||[], formations:d.formations||[], rq:d.rq??null, client:d.client||"", chantier:d.chantier||"", validated:S.decision, validatedAt:new Date().toISOString(), createdAt:new Date().toISOString(), notes:"",
     steps:{mailArrivant:{},mailParrain:{},q1m:{token:tok()},p1m:{token:tok()},q3m:{token:tok()},ack:{token:tok()}}};
   try{ await saveDossier(dos);
     if(I.fromRecu){ try{ await deleteRecu(I.fromRecu,false); }catch(_){} }
@@ -502,7 +526,7 @@ async function createDossier(){
 
 async function fetchAnswers(){ S.fetching=true; render(); await load(false); S.fetching=false; render(); toast("À jour."); }
 async function openRecu(r){
-  const d={...r.payload}; const ap=autoParrain(d.poste);
+  const d={...r.payload}; const ap=autoParrain(d);
   S.imp={data:d, fromRecu:r.id, parrain:ap?{...ap}:null, auto:!!ap, loading:!!r.hasPdf, name:"Attestation_"+(d.nom||"")+"_"+(d.prenom||"")+".pdf"};
   S.tab="import"; render(); window.scrollTo({top:0});
   if(r.hasPdf){ try{ const b=await (await api("recus/"+encodeURIComponent(r.id)+"/pdf")).arrayBuffer(); if(S.imp?.fromRecu===r.id){ S.imp.bytes=new Uint8Array(b); S.imp.loading=false; render(); } }catch(_){ if(S.imp){ S.imp.loading=false; render(); } } }
@@ -545,8 +569,9 @@ document.addEventListener("click",async e=>{
   if(a==="askDel"){ S.confirmDel=S.open; $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===S.open)); return; }
   if(a==="noDel"){ S.confirmDel=null; $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===S.open)); return; }
   if(a==="delD"){ await deleteDossier(S.open); $("#sheet").innerHTML=""; S.open=null; S.confirmDel=null; toast("Dossier supprimé."); return; }
-  if(a==="addP"){ S.parrains.push({poste:"tous",nom:"",email:"",pourquoi:""}); render(); return; }
-  if(a==="saveP"){ document.querySelectorAll("[data-p]").forEach(i=>{ const [ix,k]=i.dataset.p.split(":"); S.parrains[+ix][k]= i.type==="checkbox" ? i.checked : i.value.trim(); }); S.parrains=S.parrains.filter(p=>p.nom); await saveParrains(); toast("Parrains enregistrés."); render(); return; }
+  if(a==="importP"){ document.querySelectorAll("[data-p]").forEach(i=>{ const [ix,k]=i.dataset.p.split(":"); S.parrains[+ix][k]= i.type==="checkbox" ? i.checked : i.value.trim(); }); PARRAINS_CICR.forEach(x=>{ if(!S.parrains.some(p=>p.nom.toLowerCase()===x.nom.toLowerCase())) S.parrains.push({...x}); }); await saveParrains(); toast("Parrains CICR ajoutés. Complétez les mails en rouge, puis Enregistrer."); render(); return; }
+  if(a==="addP"){ S.parrains.push({site:"atelier",famille:"tous",nom:"",email:"",pourquoi:""}); render(); return; }
+  if(a==="saveP"){ document.querySelectorAll("[data-p]").forEach(i=>{ const [ix,k]=i.dataset.p.split(":"); S.parrains[+ix][k]= i.type==="checkbox" ? i.checked : i.value.trim(); }); S.parrains=S.parrains.filter(p=>p.nom).map(p=>{ const q={...p}; if(q.famille) delete q.poste; return q; }); await saveParrains(); toast("Parrains enregistrés."); render(); return; }
   if(a==="saveSet"){ document.querySelectorAll("[data-set]").forEach(i=>S.settings[i.dataset.set]=i.value.trim()); await saveSettings(); toast("Réglages enregistrés."); return; }
   if(a==="purge"){ const m=+$("#purgeM").value, lim=new Date(); lim.setMonth(lim.getMonth()-m); const old=S.dossiers.filter(d=>d.date && new Date(d.date)<lim); if(!old.length){ toast("Aucun dossier aussi ancien."); return; } if(t.dataset.confirm!=="1"){ t.dataset.confirm="1"; t.textContent=`Confirmer la suppression de ${old.length} dossier(s)`; return; } for(const d of old) await deleteDossier(d.id); toast(`${old.length} dossier(s) supprimé(s).`); return; }
   if(a==="sigclear"){ S.sig=null; render(); return; }
@@ -554,10 +579,10 @@ document.addEventListener("click",async e=>{
 });
 document.addEventListener("change",async e=>{
   const el=e.target;
-  if(el.id==="pdf"){ const f=el.files[0]; if(!f) return; const r=await readPdf(f); if(r.err&&!r.data){ S.imp={err:r.err}; render(); return; } const ap=autoParrain(r.data.poste); const keep=S.imp?.fromRecu?{fromRecu:S.imp.fromRecu}:{}; S.imp={...r, ...keep, parrain:ap?{...ap}:null, auto:!!ap}; render(); return; }
+  if(el.id==="pdf"){ const f=el.files[0]; if(!f) return; const r=await readPdf(f); if(r.err&&!r.data){ S.imp={err:r.err}; render(); return; } const ap=autoParrain(r.data); const keep=S.imp?.fromRecu?{fromRecu:S.imp.fromRecu}:{}; S.imp={...r, ...keep, parrain:ap?{...ap}:null, auto:!!ap}; render(); return; }
   if(el.id==="com"){ S.comment=el.value; return; }
   if(el.id==="sigimg"){ const f=el.files[0]; if(!f) return; const u=URL.createObjectURL(f), im=new Image(); im.onload=()=>{ const c=document.createElement("canvas"),W=900,H=300; c.width=W;c.height=H; const x=c.getContext("2d"), r=Math.min(W/im.width,H/im.height); x.drawImage(im,(W-im.width*r)/2,(H-im.height*r)/2,im.width*r,im.height*r); const d=x.getImageData(0,0,W,H),p=d.data; for(let i=0;i<p.length;i+=4){ if((p[i]+p[i+1]+p[i+2])/3>200) p[i+3]=0; } x.putImageData(d,0,0); S.sig=c.toDataURL("image/png"); URL.revokeObjectURL(u); render(); }; im.src=u; return; }
-  if(el.dataset.imp){ S.imp.data[el.dataset.imp]=el.value; if(el.dataset.imp==="poste"){ S.imp.data.posteLabel=POSTES[el.value]; const ap=autoParrain(el.value); if(ap && !S.imp.parrainManual){ S.imp.parrain={...ap}; S.imp.auto=true; render(); } } return; }
+  if(el.dataset.imp){ S.imp.data[el.dataset.imp]=el.value; if(el.dataset.imp==="poste"){ S.imp.data.posteLabel=POSTES[el.value]; const ap=autoParrain(S.imp.data); if(ap && !S.imp.parrainManual){ S.imp.parrain={...ap}; S.imp.auto=true; render(); } } return; }
   if(el.dataset.impp!==undefined){ const p=S.parrains[+el.value]; if(p){ S.imp.parrain={...p}; S.imp.auto=false; S.imp.parrainManual=true; render(); } return; }
   if(el.dataset.impparr){ S.imp.parrain=S.imp.parrain||{}; S.imp.parrain[el.dataset.impparr]=el.value.trim(); S.imp.parrainManual=true; S.imp.auto=false; return; }
   if(el.dataset.edp!==undefined){ const p=S.parrains[+el.value]; if(p){ document.querySelector('[data-edparr="nom"]').value=p.nom; document.querySelector('[data-edparr="email"]').value=p.email||""; document.querySelector('[data-edparr="pourquoi"]').value=p.pourquoi||""; } return; }

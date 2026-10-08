@@ -40,7 +40,7 @@ type Mail = { to: string; toName: string; subject: string; blocks: Block[] };
 
 export function mailFor(d: any, k: string, settings: any): Mail | null {
   const pa = d.parrain || {};
-  const lieu = [...(d.lieux || []), d.chantier].filter(Boolean).join(", ") || "à préciser";
+  const lieu = [...(d.lieux || []).map((l: string) => l === "Chantier client" && d.client && !/^(Autre|Je ne sais)/.test(d.client) ? "chantier " + d.client : l), d.chantier].filter(Boolean).join(", ") || "à préciser";
   const sign = `${settings?.signataire || "Romain Errard"}\n${settings?.fonction || "SSE Manager"} - CICR Verdon\n${PHONE} - ${SSE_MAIL}`;
   const contacts = { list: [
     `Sécurité, santé, environnement : Romain Errard, SSE Manager - ${PHONE} - ${SSE_MAIL}`,
