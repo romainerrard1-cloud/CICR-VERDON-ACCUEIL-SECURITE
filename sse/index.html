@@ -107,11 +107,11 @@ const STEPS = [
   {k:"p1m", l:"Évaluation par le parrain à 1 mois", d:30, to:"parrain", form:true},
   {k:"q3m", l:"Expérience à 3 mois (étoiles + avis Google)", d:90, to:"arrivant", form:true}
 ];
-const LABELS = {accueil:"Accueil sécurité",consignes:"Consignes claires",parrain:"Accompagnement du parrain",epi:"EPI dès le 1er jour",securite:"Se sent en sécurité",danger:"Situation dangereuse non traitée",danger_detail:"Détail",commentaire:"Commentaire",c_securite:"Respect des consignes SSE",c_epi:"Port des EPI",c_gestes:"Gestes du métier",c_autonomie:"Autonomie",c_qualite:"Qualité du travail",c_equipe:"Intégration dans l'équipe",c_vigilance:"Vigilance et remontées",fin_parrainage:"Fin de parrainage",experience:"Expérience chez Verdon",recommande:"Recommanderait CICR Verdon"};
-const STAR_KEYS = ["accueil","consignes","parrain","securite","experience"];
+const LABELS = {accueil:"Accueil sécurité",consignes:"Consignes claires",parrain:"Accompagnement du parrain",epi:"EPI dès le 1er jour",securite:"Se sent en sécurité",danger:"Situation dangereuse non traitée",danger_detail:"Détail",commentaire:"Commentaire",c_securite:"Respect des consignes SSE",c_risques:"Maîtrise des 3 risques majeurs",c_epi:"Port des EPI",c_gestes:"Gestes du métier",c_autonomie:"Autonomie",c_qualite:"Qualité du travail",c_equipe:"Intégration dans l'équipe",c_vigilance:"Vigilance et remontées",fin_parrainage:"Fin de parrainage",experience:"Expérience chez Verdon",recommande:"Recommanderait CICR Verdon"};
+const STAR_KEYS = ["accueil","consignes","parrain","securite","experience","c_securite","c_risques","c_epi","c_gestes","c_autonomie","c_qualite","c_equipe","c_vigilance"];
 
 /* ===================== État ===================== */
-const S = {tab:"todo", recus:[], dossiers:[], parrains:[], settings:{...DEFAULT_SETTINGS}, ready:false, dbOk:true, open:null, mail:null, imp:null, sig:null, decision:"Validé", comment:"", fetchMsg:"", fetching:false, delSubs:true};
+const S = {tab:"todo", recus:[], dossiers:[], parrains:[], settings:{...DEFAULT_SETTINGS}, ready:false, dbOk:true, open:null, mail:null, imp:null, sig:null, decision:"Validé", comment:"", fetchMsg:"", fetching:false, delSubs:true, mailOk:false, mailPrev:null};
 let TOKEN=null;
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -139,75 +139,21 @@ function tasks(){
     if(d.archived) return;
     if(!d.parrain?.nom) out.push({d, k:"parrain", cls:"t-late", when:"Maintenant", l:"Désigner le parrain tuteur", sub:`${fullName(d)} · ${d.posteLabel||""}`});
     STEPS.forEach(st=>{ const r=stepState(d,st);
+      if(S.mailOk){ const s=(d.steps||{})[st.k]||{};
+        if(s.error && !s.sentAt) out.push({d, k:st.k, cls:"t-late", when:"Échec d'envoi", date:null, l:st.l, sub:`${fullName(d)} · ${s.error}`});
+        else if(r.state==="late" && r.diff<-1 && !s.sentAt) out.push({d, k:st.k, cls:"t-late", when:"Non envoyé", date:r.due, l:st.l, sub:`${fullName(d)} · ${d.posteLabel||""}`});
+        return; }
       if(["late","now","soon"].includes(r.state)) out.push({d, k:st.k, cls:r.state==="late"?"t-late":r.state==="now"?"t-now":"t-soon", when:r.state==="late"?`En retard`:r.state==="now"?"Aujourd'hui":`Dans ${r.diff} j`, date:r.due, l:st.l, sub:`${fullName(d)} · ${d.posteLabel||""}`});
     });
   });
   const ord={"t-late":0,"t-now":1,"t-soon":2}; return out.sort((a,b)=>ord[a.cls]-ord[b.cls]||(a.date||0)-(b.date||0));
 }
 
-/* ===================== Mails ===================== */
-const SIGN = ()=>`\n\n${S.settings.signataire}\n${S.settings.fonction} - CICR Verdon\nrerrard@groupe-verdon.com`;
-const CONTACTS_TXT = `En cas de question :\n- Sécurité, santé, environnement : Romain Errard, SSE Manager - rerrard@groupe-verdon.com\n- Votre arrivée : accueil CICR - 03 44 75 73 00\n- RH : Laura Ducoin, HR Business Partner - 06 01 06 31 50 - LDucoin@groupe-verdon.com`;
-function qLink(d,k){ const s=(d.steps||{})[k]||{}; const p=new URLSearchParams({f:k,t:s.token||"",a:k==="p1m"?fullName(d):(d.prenom||"")}); if(k==="q1m"&&d.parrain?.nom) p.set("p",d.parrain.nom); return `${S.settings.site.replace(/\/$/,"")}/q.html?${p}`; }
-function mailFor(d,k){
-  const pa=d.parrain||{}, lieu=(d.lieux||[]).join(" + ")||"à préciser";
-  if(k==="mailArrivant") return {to:d.emailPerso, subject:"Bienvenue chez CICR Verdon : votre parrain tuteur", body:
-`Bonjour ${d.prenom},
-
-Votre accueil sécurité a bien été validé. Bienvenue chez CICR Verdon !
-
-Pendant vos premières semaines, vous serez accompagné(e) par votre parrain tuteur : ${pa.nom}.${pa.pourquoi?`\nIl ou elle a été choisi(e) pour : ${pa.pourquoi}`:""}
-
-Son rôle : vous accueillir, vous présenter l'équipe, vous montrer votre poste et les bons gestes, vérifier que les consignes de sécurité sont claires et répondre à toutes vos questions. N'hésitez jamais à vous adresser à lui ou à elle.
-
-Votre arrivée : le ${fmt(d.date+"T12:00:00")}, ${lieu}. Présentez-vous à 7h30 avec vos EPI.
-
-${CONTACTS_TXT}
-
-Dans un mois, vous recevrez un court questionnaire sur votre accueil.
-
-Bonne mission,${SIGN()}`};
-  if(k==="mailParrain") return {to:pa.email, subject:`Vous êtes parrain tuteur de ${fullName(d)}`, body:
-`Bonjour ${(pa.nom||"").split(" ")[0]},
-
-Vous êtes désigné(e) parrain tuteur de ${fullName(d)}, ${d.posteLabel||""} (${d.statut||""}${d.agence?`, agence ${d.agence}`:""}), qui arrive le ${fmt(d.date+"T12:00:00")} (${lieu}).
-
-Pour rappel, vos missions :
-- l'accueillir et lui présenter l'équipe ;
-- lui montrer le poste, les modes opératoires et les bons gestes ;
-- vérifier qu'il ou elle a compris les consignes de sécurité ;${d.renforcee?"\n- réaliser avec lui ou elle la partie pratique de la formation renforcée à la sécurité ;":""}
-- rester disponible pour toutes ses questions.
-
-Dans un mois, vous recevrez une courte évaluation de ses premières semaines. C'est aussi à ce moment que nous acterons ensemble la fin de la période d'accompagnement.
-
-Merci pour votre engagement,${SIGN()}`};
-  if(k==="q1m") return {to:d.emailPerso, subject:"Votre premier mois chez CICR Verdon : 2 minutes pour nous répondre", body:
-`Bonjour ${d.prenom},
-
-Cela fait un mois que vous nous avez rejoints. Votre avis sur votre accueil, la sécurité et votre parrain tuteur nous aide à nous améliorer.
-
-Répondez en 2 minutes ici :
-${qLink(d,"q1m")}
-
-Merci !${SIGN()}`};
-  if(k==="p1m") return {to:pa.email, subject:`Bilan à 1 mois de ${fullName(d)}`, body:
-`Bonjour ${(pa.nom||"").split(" ")[0]},
-
-Cela fait un mois que vous accompagnez ${fullName(d)}. Merci d'évaluer ses premières semaines (consignes de sécurité, EPI, gestes du métier, autonomie…) et de nous dire si la période d'accompagnement peut se terminer.
-
-Le questionnaire prend 2 minutes :
-${qLink(d,"p1m")}
-
-Merci !${SIGN()}`};
-  if(k==="q3m") return {to:d.emailPerso, subject:"Votre expérience chez Verdon", body:
-`Bonjour ${d.prenom},
-
-Cela fait trois mois que vous travaillez avec nous. Comment s'est passée votre expérience chez Verdon ?
-
-Donnez-nous votre avis en quelques clics :
-${qLink(d,"q3m")}
-
-Merci pour votre confiance,${SIGN()}`};
+/* ===================== Mails (rédigés et envoyés par le site) ===================== */
+async function openMail(id,k){
+  S.mail={id,k}; S.mailPrev=null; $("#sheet").innerHTML=vMail(S.dossiers.find(x=>x.id===id),k);
+  try{ const r=await api("mail/"+encodeURIComponent(id)+"/"+k); S.mailPrev=await r.json(); }catch(e){ S.mailPrev={err:e.code==="http"?"Désignez d'abord le parrain tuteur.":"Aperçu indisponible."}; }
+  if(S.mail&&S.mail.id===id) $("#sheet").innerHTML=vMail(S.dossiers.find(x=>x.id===id),k);
 }
 
 /* ===================== Base de données (site) ===================== */
@@ -217,7 +163,7 @@ async function api(path,opt={}){
   if(!r.ok) throw Object.assign(new Error("http "+r.status),{code:"http"});
   return r;
 }
-async function saveDossier(d){ await api("dossiers/"+encodeURIComponent(d.id),{method:"PUT",body:JSON.stringify(d)}); const i=S.dossiers.findIndex(x=>x.id===d.id); if(i<0) S.dossiers.push(d); else S.dossiers[i]=d; render(); }
+async function saveDossier(d){ const r=await (await api("dossiers/"+encodeURIComponent(d.id),{method:"PUT",body:JSON.stringify(d)})).json(); if(r.dossier) d=r.dossier; const i=S.dossiers.findIndex(x=>x.id===d.id); if(i<0) S.dossiers.push(d); else S.dossiers[i]=d; render(); }
 async function deleteDossier(id){ await api("dossiers/"+encodeURIComponent(id),{method:"DELETE"}); S.dossiers=S.dossiers.filter(x=>x.id!==id); render(); }
 async function deleteRecu(id,pdf){ await api("recus/"+encodeURIComponent(id)+(pdf?"?pdf=1":""),{method:"DELETE"}); S.recus=S.recus.filter(x=>x.id!==id); }
 async function saveParrains(){ await api("config/parrains",{method:"PUT",body:JSON.stringify({list:S.parrains})}); }
@@ -228,7 +174,7 @@ async function load(quiet){
     S.dossiers=j.dossiers||[];
     S.recus=(j.recus||[]).map(r=>({...r, nom:r.payload?.nom||"", prenom:r.payload?.prenom||""})).sort((a,b)=>(a.created_at||"").localeCompare(b.created_at||""));
     if(S.tab!=="parrains"||!quiet) S.parrains=j.parrains||[];
-    S.settings={...DEFAULT_SETTINGS,...(j.settings||{})}; if(!S.settings.site) S.settings.site=location.origin;
+    S.mailOk=!!j.mailOk; S.settings={...DEFAULT_SETTINGS,...(j.settings||{})}; if(!S.settings.site) S.settings.site=location.origin;
     S.dbOk=true;
   }catch(e){ if(e.code==="auth") return; S.dbOk=false; }
   S.ready=true;
@@ -258,6 +204,7 @@ function vTodo(){
     <div>${t.recu?`<button class="btn small" data-recu="${t.recu.id}">Traiter</button>`:t.k==="parrain"?`<button class="btn small" data-open="${t.d.id}">Désigner</button>`:`<button class="btn small" data-mail="${t.d.id}:${t.k}">Préparer le mail</button>`}</div></div>`;
   return `<div class="head"><div><p class="eyebrow">Tableau de bord</p><h2>À faire</h2></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn ghost" data-act="fetch" ${S.fetching?"disabled":""}>${S.fetching?"Actualisation…":"Actualiser"}</button></div></div>
+    ${S.mailOk?`<div class="callout good" style="margin-bottom:12px"><span><b>Envoi automatique activé.</b> Dès que vous désignez un parrain, l'arrivant et le parrain reçoivent leur mail. Les questionnaires partent seuls à 1 mois et à 3 mois. Seuls les échecs d'envoi apparaissent ici.</span></div>`:`<div class="callout warn" style="margin-bottom:12px"><span><b>Envoi automatique pas encore activé.</b> En attendant, préparez les mails ci-dessous et envoyez-les depuis Outlook.</span></div>`}
     ${S.fetchMsg?`<div class="callout ${S.fetchMsg.startsWith("✓")?"good":"warn"}" style="margin-bottom:12px"><span>${S.fetchMsg}</span></div>`:""}
     ${!S.dossiers.length&&!S.recus.length?`<div class="empty"><b>Aucun arrivant pour l'instant.</b><span>Les accueils terminés sur le site arrivent ici automatiquement, ainsi que les réponses aux questionnaires.</span><button class="btn" data-tab="import">Basculer une attestation</button></div>`:
     act.length?`<div class="tasks">${act.map(row).join("")}</div>`:`<div class="callout good"><b>Rien à faire aujourd'hui.</b><span>Toutes les actions dues sont faites.</span></div>`}
@@ -288,7 +235,7 @@ function vImport(){
     <div><p class="lbl" style="margin-bottom:8px">2. Vérifiez le dossier</p><div class="grid2">
       ${[["prenom","Prénom"],["nom","Nom"],["emailPerso","Mail personnel"],["statut","Statut"],["agence","Agence"],["date","Date d'arrivée","date"]].map(([k,l,t])=>`<div class="field"><label>${l}</label><input data-imp="${k}" type="${t||"text"}" value="${esc(I.data[k]||"")}"></div>`).join("")}
       <div class="field"><label>Poste</label><select data-imp="poste">${Object.entries(POSTES).map(([k,l])=>`<option value="${k}" ${I.data.poste===k?"selected":""}>${l}</option>`).join("")}</select></div>
-      <div class="field"><label>Questionnaire</label><input value="${I.data.quiz??"—"}/15 · ${I.data.tentatives??1} tentative(s)" disabled></div>
+      <div class="field"><label>Questionnaires</label><input value="${I.data.quiz??"—"}/15 (${I.data.tentatives??1} tentative(s)) · renforcé ${I.data.rq??"—"}/10" disabled></div>
     </div></div>
     <div><p class="lbl" style="margin-bottom:8px">3. Parrain tuteur ${I.auto?`<span class="chip ok">proposé automatiquement selon le poste</span>`:""}</p><div class="grid2">
       <div class="field full"><select data-impp>${parrainOptions(I.parrain?.nom)}</select></div>
@@ -301,7 +248,7 @@ function vImport(){
       <div class="sig-wrap"><canvas id="sig"></canvas><span class="ph" id="sigph" ${S.sig?"hidden":""}>Signez ici</span></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn ghost small" data-act="sigclear">Effacer</button><label class="btn ghost small" for="sigimg">Importer une image de ma signature</label><input id="sigimg" type="file" accept="image/*" hidden></div>
     </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn good" data-act="create">Créer le dossier</button><button class="btn" data-act="createSign" ${S.sig&&I.bytes?"":"disabled"}>Créer le dossier et télécharger l'attestation signée</button></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn good" data-act="create">${S.mailOk&&I.parrain?.email?"Créer le dossier et envoyer les mails":"Créer le dossier"}</button><button class="btn" data-act="createSign" ${S.sig&&I.bytes?"":"disabled"}>Créer le dossier et télécharger l'attestation signée</button></div>
     `:""}
   </div>`;
 }
@@ -331,32 +278,37 @@ function vDetail(d){
     <div class="sb">
       <div class="grid2">${[["prenom","Prénom"],["nom","Nom"],["emailPerso","Mail personnel"],["statut","Statut"],["agence","Agence"],["date","Date d'arrivée","date"]].map(([k,l,t])=>`<div class="field"><label>${l}</label><input data-ed="${k}" type="${t||"text"}" value="${esc(d[k]||"")}"></div>`).join("")}
         <div class="field"><label>Poste</label><select data-ed="poste">${Object.entries(POSTES).map(([k,l])=>`<option value="${k}" ${d.poste===k?"selected":""}>${l}</option>`).join("")}</select></div>
-        <div class="field"><label>Questionnaire d'accueil</label><input value="${d.quiz??"—"}/15" disabled></div></div>
+        <div class="field"><label>Questionnaire d'accueil</label><input value="${d.quiz??"—"}/15 · accueil renforcé ${d.rq??"—"}/10" disabled></div></div>
+      ${(d.risques||[]).length?`<p class="hint" style="margin:0">Risques majeurs du poste : <b>${esc(d.risques.join(", "))}</b></p>`:""}
       <div><p class="lbl" style="margin-bottom:6px">Parrain tuteur</p><div class="grid2"><div class="field full"><select data-edp>${parrainOptions(d.parrain?.nom)}</select></div>
         <div class="field"><label>Nom</label><input data-edparr="nom" value="${esc(d.parrain?.nom||"")}"></div><div class="field"><label>Mail</label><input data-edparr="email" value="${esc(d.parrain?.email||"")}"></div>
         <div class="field full"><label>Pourquoi ce parrain</label><input data-edparr="pourquoi" value="${esc(d.parrain?.pourquoi||"")}"></div></div></div>
       <div class="field"><label>Notes</label><textarea data-ed="notes">${esc(d.notes||"")}</textarea></div>
       <div><button class="btn" data-act="saveD">Enregistrer les modifications</button></div>
       <div><p class="lbl" style="margin-bottom:6px">Suivi</p><div class="timeline">${STEPS.map(st=>{ const r=stepState(d,st), s=r.s||{}; const c=r.state==="ok"?"ok":r.state==="late"?"late":["now","soon","wait"].includes(r.state)?"due":"";
-        return `<div><div class="tl ${c}"><i></i><span><b>${st.l}</b><br><span class="hint">${r.state==="ok"?(st.form?`Répondu le ${fmt(s.doneAt)}`:`Envoyé le ${fmt(s.sentAt)}`):r.state==="wait"?`Envoyé le ${fmt(s.sentAt)}, en attente de réponse`:r.state==="blocked"?"Désignez d'abord le parrain":`Prévu le ${fmt(r.due)}`}</span></span>
+        return `<div><div class="tl ${c}"><i></i><span><b>${st.l}</b><br><span class="hint">${s.error&&!s.sentAt?`<span style="color:var(--bad)">Échec d'envoi : ${esc(s.error)}</span>`:r.state==="ok"?(st.form?`Répondu le ${fmt(s.doneAt)}`:`${s.auto?"Envoyé automatiquement":"Envoyé"} le ${fmt(s.sentAt)}`):r.state==="wait"?`Envoyé le ${fmt(s.sentAt)}, en attente de réponse`:r.state==="blocked"?"Désignez d'abord le parrain":`${S.mailOk?"Envoi automatique le":"Prévu le"} ${fmt(r.due)}`}</span></span>
           <span>${r.state==="blocked"?"":`<button class="btn ghost small" data-mail="${d.id}:${st.k}">${r.state==="ok"&&!st.form?"Revoir":"Mail"}</button>`}</span></div>${st.form?ans(st.k):""}</div>`; }).join("")}</div></div>
       ${d.finParrainage?`<div class="callout good"><span>Fin de la période d'accompagnement actée le ${fmt(d.finParrainage)} (MASE 2.2.1.9).</span></div>`:""}
       <div style="border-top:1px solid var(--line);padding-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${S.confirmDel===d.id?`<span class="hint">Supprimer définitivement ce dossier ?</span><button class="btn danger small" data-act="delD">Oui, supprimer</button><button class="btn ghost small" data-act="noDel">Annuler</button>`:`<button class="btn ghost small" data-act="askDel">Supprimer le dossier</button>`}</div>
     </div></div></div>`;
 }
 function vMail(d,k){
-  const m=mailFor(d,k), st=STEPS.find(x=>x.k===k), s=(d.steps||{})[k]||{};
-  const href=`mailto:${encodeURIComponent(m.to||"")}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`;
-  return `<div class="sheet-bg" data-close><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mt">
-    <div class="sh"><div><span class="eyebrow">${esc(fullName(d))}</span><h3 id="mt">${st.l}</h3></div><button class="x" data-close aria-label="Fermer">✕</button></div>
+  const P=S.mailPrev, st=STEPS.find(x=>x.k===k), s=(d.steps||{})[k]||{};
+  const head=`<div class="sh"><div><span class="eyebrow">${esc(fullName(d))}</span><h3 id="mt">${st.l}</h3></div><button class="x" data-close aria-label="Fermer">✕</button></div>`;
+  if(!P||P.err) return `<div class="sheet-bg" data-close><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mt">${head}<div class="sb"><p class="hint">${P?.err||"Chargement de l'aperçu…"}</p></div></div></div>`;
+  const href=`mailto:${encodeURIComponent(P.to||"")}?subject=${encodeURIComponent(P.subject)}&body=${encodeURIComponent(P.text)}`;
+  const status = s.sentAt?`<div class="callout good"><span>${s.auto?"Envoyé automatiquement":"Envoyé"} le ${new Date(s.sentAt).toLocaleString("fr-FR")}.</span></div>` : s.error?`<div class="callout bad"><span><b>Échec d'envoi :</b> ${esc(s.error)}</span></div>` : st.d && S.mailOk?`<div class="callout info"><span>Envoi automatique prévu le ${fmt(addDays(d.date,st.d))}.</span></div>`:"";
+  return `<div class="sheet-bg" data-close><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mt">${head}
     <div class="sb mailbox">
-      ${!m.to?`<div class="callout warn"><span>Aucune adresse mail pour ${st.to==="parrain"?"le parrain":"l'arrivant"}. Complétez le dossier.</span></div>`:""}
-      <div class="lineb"><span class="lbl">À</span><span class="mono" style="user-select:all">${esc(m.to||"—")}</span><button class="btn ghost small" data-copy="to">Copier</button></div>
-      <div class="lineb"><span class="lbl">Objet</span><span style="user-select:all">${esc(m.subject)}</span><button class="btn ghost small" data-copy="subject">Copier</button></div>
-      <pre id="mailbody">${esc(m.body)}</pre>
-      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost small" data-copy="body">Copier le texte</button><a class="btn ghost small" href="${href}" target="_blank" rel="noopener">Ouvrir dans ma messagerie</a>
+      ${status}
+      ${!P.to?`<div class="callout warn"><span>Aucune adresse mail pour ${st.to==="parrain"?"le parrain":"l'arrivant"}. Complétez le dossier.</span></div>`:""}
+      <div class="lineb"><span class="lbl">À</span><span class="mono" style="user-select:all">${esc(P.to||"—")}</span></div>
+      <div class="lineb"><span class="lbl">Objet</span><span style="user-select:all">${esc(P.subject)}</span></div>
+      <pre id="mailbody">${esc(P.text)}</pre>
+      ${S.mailOk?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn good small" data-act="sendNow" ${P.to?"":"disabled"}>${s.sentAt?"Renvoyer maintenant":"Envoyer maintenant"}</button></div>`
+      :`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost small" data-copy="text">Copier le texte</button><a class="btn ghost small" href="${href}" target="_blank" rel="noopener">Ouvrir dans ma messagerie</a>
         <button class="btn good small" data-act="markSent" style="margin-left:auto">${s.sentAt?`Envoyé le ${fmt(s.sentAt)} · remarquer`:"Marquer comme envoyé"}</button></div>
-      <span class="hint">Copiez le texte dans Outlook, puis cliquez sur « Marquer comme envoyé ». Le bouton « Ouvrir dans ma messagerie » peut ne pas fonctionner selon votre navigateur.</span>
+      <span class="hint">L'envoi automatique n'est pas encore activé : copiez le texte dans Outlook, puis cliquez sur « Marquer comme envoyé ».</span>`}
     </div></div></div>`;
 }
 
@@ -406,7 +358,7 @@ async function createDossier(){
   if(!d.prenom||!d.nom){ toast("Renseignez au moins le prénom et le nom."); return false; }
   const id=(d.nom+"-"+d.prenom+"-"+(d.date||"")).toLowerCase().normalize("NFD").replace(/[^\w-]+/g,"").slice(0,60)+"-"+tok().slice(0,6);
   const dos={id, nom:d.nom, prenom:d.prenom, emailPerso:d.emailPerso||"", statut:d.statut||"", agence:d.agence||"", poste:d.poste||"autre", posteLabel:d.posteLabel||POSTES[d.poste]||"", date:d.date||new Date().toISOString().slice(0,10), lieux:d.lieux||[], quiz:d.quiz??null, tentatives:d.tentatives??null, renforcee:!!d.renforcee,
-    parrain:I.parrain?.nom?{nom:I.parrain.nom,email:I.parrain.email||"",pourquoi:I.parrain.pourquoi||""}:null, recuId:I.fromRecu||null, validated:S.decision, validatedAt:new Date().toISOString(), createdAt:new Date().toISOString(), notes:"",
+    parrain:I.parrain?.nom?{nom:I.parrain.nom,email:I.parrain.email||"",pourquoi:I.parrain.pourquoi||""}:null, recuId:I.fromRecu||null, risques:d.risques||[], rq:d.rq??null, chantier:d.chantier||"", validated:S.decision, validatedAt:new Date().toISOString(), createdAt:new Date().toISOString(), notes:"",
     steps:{mailArrivant:{},mailParrain:{},q1m:{token:tok()},p1m:{token:tok()},q3m:{token:tok()}}};
   try{ await saveDossier(dos);
     if(I.fromRecu){ try{ await deleteRecu(I.fromRecu,false); }catch(_){} }
@@ -428,14 +380,15 @@ document.addEventListener("click",async e=>{
   if(t.dataset.tab){ S.tab=t.dataset.tab; render(); return; }
   if(t.dataset.recu){ const r=S.recus.find(x=>x.id===t.dataset.recu); if(r) openRecu(r); return; }
   if(t.dataset.open){ S.open=t.dataset.open; $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===S.open)); return; }
-  if(t.dataset.mail){ const [id,k]=t.dataset.mail.split(":"); S.mail={id,k}; $("#sheet").innerHTML=vMail(S.dossiers.find(x=>x.id===id),k); return; }
-  if(t.dataset.copy){ const d=S.dossiers.find(x=>x.id===S.mail.id), m=mailFor(d,S.mail.k), v=m[t.dataset.copy]||""; try{ await navigator.clipboard.writeText(v); t.textContent="Copié"; }catch(_){ toast("Sélectionnez le texte et copiez-le avec Ctrl+C."); } return; }
+  if(t.dataset.mail){ const [id,k]=t.dataset.mail.split(":"); openMail(id,k); return; }
+  if(t.dataset.copy){ const v=S.mailPrev?.text||""; try{ await navigator.clipboard.writeText(v); t.textContent="Copié"; }catch(_){ toast("Sélectionnez le texte et copiez-le avec Ctrl+C."); } return; }
   if(t.dataset.dec){ S.decision=t.dataset.dec; t.parentElement.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b===t)); return; }
   if(t.dataset.delp!==undefined){ S.parrains.splice(+t.dataset.delp,1); render(); return; }
   const a=t.dataset.act; if(!a) return;
   if(a==="fetch") return fetchAnswers();
   if(a==="dlrecu"){ if(S.imp?.bytes) download(new Blob([S.imp.bytes],{type:"application/pdf"}),S.imp.name); return; }
   if(a==="logout"){ try{ sessionStorage.removeItem("sse_tok"); }catch(_){ } TOKEN=null; clearInterval(window.__poll); showLock(false); return; }
+  if(a==="sendNow"){ t.disabled=true; t.textContent="Envoi…"; try{ const r=await fetch("/api/mail/"+encodeURIComponent(S.mail.id)+"/"+S.mail.k,{method:"POST",headers:{authorization:"Bearer "+TOKEN}}); const j=await r.json(); if(j.dossier){ const i=S.dossiers.findIndex(x=>x.id===j.dossier.id); if(i>=0) S.dossiers[i]=j.dossier; } toast(r.ok?"Mail envoyé.":"Échec : "+(j.error||r.status)); }catch(_){ toast("Envoi impossible."); } $("#sheet").innerHTML=""; S.mail=null; render(); return; }
   if(a==="markSent"){ const d=JSON.parse(JSON.stringify(S.dossiers.find(x=>x.id===S.mail.id))); d.steps[S.mail.k]={...(d.steps[S.mail.k]||{}), sentAt:new Date().toISOString()}; await saveDossier(d); $("#sheet").innerHTML=""; S.mail=null; toast("Marqué comme envoyé."); return; }
   if(a==="saveD"){ const d=JSON.parse(JSON.stringify(S.dossiers.find(x=>x.id===S.open))); document.querySelectorAll("[data-ed]").forEach(i=>d[i.dataset.ed]=i.value); d.posteLabel=POSTES[d.poste]||d.posteLabel; const p={}; document.querySelectorAll("[data-edparr]").forEach(i=>p[i.dataset.edparr]=i.value.trim()); d.parrain=p.nom?p:null; await saveDossier(d); toast("Dossier enregistré."); $("#sheet").innerHTML=""; S.open=null; return; }
   if(a==="askDel"){ S.confirmDel=S.open; $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===S.open)); return; }

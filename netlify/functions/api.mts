@@ -1,11 +1,12 @@
 import { getStore } from "@netlify/blobs";
 import type { Config, Context } from "@netlify/functions";
+import { mailFor, renderText, sendMail, processDossier, mailConfigured, STEPS } from "../lib/mails.mts";
 
 /* API de l'espace SSE CICR Verdon.
    Public : POST /api/accueil (fin d'accueil), POST /api/q (questionnaires), POST /api/login.
    Privé (jeton) : état, dossiers, accueils reçus, parrains, réglages. */
 
-const ANSWER_KEYS = ["accueil","consignes","parrain","epi","securite","danger","danger_detail","commentaire","c_securite","c_epi","c_gestes","c_autonomie","c_qualite","c_equipe","c_vigilance","fin_parrainage","experience","recommande"];
+const ANSWER_KEYS = ["accueil","consignes","parrain","epi","securite","danger","danger_detail","commentaire","c_securite","c_risques","c_epi","c_gestes","c_autonomie","c_qualite","c_equipe","c_vigilance","fin_parrainage","experience","recommande"];
 const FORMS = ["q1m","p1m","q3m"];
 const enc = new TextEncoder();
 
@@ -102,7 +103,7 @@ export default async (req: Request, _context: Context) => {
         listJSON("dossiers/"), listJSON("recus/"),
         st.get("config/parrains", { type: "json" }), st.get("config/settings", { type: "json" }),
       ]);
-      return json({ dossiers, recus, parrains: (parrains as any)?.list || [], settings: settings || {} });
+      return json({ dossiers, recus, parrains: (parrains as any)?.list || [], settings: settings || {}, mailOk: mailConfigured() });
     }
 
     if (p[0] === "dossiers" && p[1] && safeId(p[1])) {
@@ -110,9 +111,16 @@ export default async (req: Request, _context: Context) => {
       if (m === "PUT") {
         const d = await req.json();
         d.id = id;
-        await st.setJSON("dossiers/" + id, d);
         for (const k of FORMS) { const t = d.steps?.[k]?.token; if (t && safeId(t)) await st.setJSON("tok/" + t, { id, k }); }
-        return json({ ok: true });
+        /* parrain changé : on renvoie les mails de désignation au nouveau parrain et à l'arrivant */
+        const prev = await st.get("dossiers/" + id, { type: "json" }) as any;
+        if (prev?.parrain?.email && d.parrain?.email && prev.parrain.email !== d.parrain.email) {
+          for (const k of ["mailArrivant", "mailParrain"]) if (d.steps?.[k]) d.steps[k] = {};
+        }
+        const settings = (await st.get("config/settings", { type: "json" })) || {};
+        await processDossier(d, settings);
+        await st.setJSON("dossiers/" + id, d);
+        return json({ ok: true, dossier: d });
       }
       if (m === "DELETE") {
         const d = await st.get("dossiers/" + id, { type: "json" }) as any;
@@ -122,6 +130,23 @@ export default async (req: Request, _context: Context) => {
         }
         await st.delete("dossiers/" + id);
         return json({ ok: true });
+      }
+    }
+
+    if (p[0] === "mail" && p[1] && safeId(p[1]) && STEPS.some((x) => x.k === p[2])) {
+      const d = await st.get("dossiers/" + p[1], { type: "json" }) as any;
+      if (!d) return json({ error: "dossier" }, 404);
+      const settings = (await st.get("config/settings", { type: "json" })) || {};
+      const m = mailFor(d, p[2], settings);
+      if (!m) return json({ error: "mail" }, 404);
+      if ((p[2] === "mailParrain" || p[2] === "p1m") && !d.parrain?.nom) return json({ error: "parrain" }, 409);
+      if (req.method === "GET") return json({ to: m.to || "", subject: m.subject, text: renderText(m), mailOk: mailConfigured() });
+      if (req.method === "POST") {
+        d.steps = d.steps || {}; const s = d.steps[p[2]] || (d.steps[p[2]] = {});
+        try { await sendMail(m); s.sentAt = new Date().toISOString(); delete s.error; delete s.tries; }
+        catch (e) { s.error = String((e as Error).message || e); await st.setJSON("dossiers/" + d.id, d); return json({ error: s.error, dossier: d }, 502); }
+        await st.setJSON("dossiers/" + d.id, d);
+        return json({ ok: true, dossier: d });
       }
     }
 

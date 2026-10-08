@@ -7,4 +7,6 @@ Site publié sur Netlify, mis à jour automatiquement à chaque modification de 
 - `/sse/` : espace SSE, protégé par code d'accès.
 - `netlify/functions/api.mts` : enregistrement des accueils, dossiers et réponses (Netlify Blobs).
 
-Variables d'environnement Netlify : `SSE_PASSWORD` (code de l'espace SSE) et `SSE_SECRET` (clé de session).
+Variables d'environnement Netlify : `SSE_PASSWORD` (code de l'espace SSE), `SSE_SECRET` (clé de session), `BREVO_API_KEY` (envoi automatique des mails), `MAIL_FROM` (expéditeur validé dans Brevo, par défaut rerrard@groupe-verdon.com).
+
+`netlify/functions/relances.mts` envoie chaque matin les questionnaires dus (1 mois, 3 mois).

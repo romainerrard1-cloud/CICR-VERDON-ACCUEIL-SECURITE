@@ -1,7 +1,7 @@
 <!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="robots" content="noindex"><style>:root{color-scheme:light;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}body{margin:0;background:#eceff2}img{max-width:100%}[hidden]{display:none!important}</style></head><body><title>Accueil Sécurité CICR Verdon</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="/vendor/jspdf.umd.min.js"></script>
 <style>
 /* Layout : un parcours en 6 étapes. Barre d'étapes en haut, une « scène » centrale par écran.
    Chaque chapitre reprend le code couleur de la signalisation de sécurité (ISO 7010). */
@@ -505,6 +505,19 @@ img.zoom{cursor:zoom-in}
 
 .risks.majors{grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:14px}
 .risk.major{border:2.5px solid #c8102e;min-height:150px}
+.renf-band{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:baseline;background:#fde8eb;border-left:5px solid #c8102e;border-radius:8px;padding:10px 14px;margin:0 0 14px}
+.renf-band .eyebrow{color:#c8102e;font-weight:700}.renf-band span:last-child{font-size:.92rem}
+.renf-steps{display:grid;gap:12px;margin:16px 0}
+.renf-step{display:flex;gap:14px;align-items:flex-start;background:var(--surface,#fff);border:1px solid var(--line,#d3d9df);border-radius:12px;padding:14px 16px}
+.renf-step .rs-n{flex:none;width:38px;height:38px;border-radius:50%;background:#c8102e;color:#fff;display:grid;place-items:center;font-weight:800;font-size:1.2rem}
+.renf-step h4{margin:2px 0 4px}.renf-step p{margin:0}
+.rquiz{display:grid;gap:12px}.rq-risk{margin:10px 0 0;color:#c8102e;text-transform:uppercase}
+.rq{border:1px solid var(--line,#d3d9df);border-radius:12px;padding:12px 14px;background:var(--surface,#fff)}
+.rq .q{font-weight:600;margin:0 0 8px}.rq .opts{display:grid;gap:6px}
+.rq .opt.ok{border-color:#0f7b3e;background:#e2f3e9}.rq .opt.ko{border-color:#b3261e;background:#fbe7e5}
+.rq-fb{margin:8px 0 0;font-size:.92rem}.rq-fb.good b{color:#0f7b3e}.rq-fb.bad b{color:#b3261e}
+.rq-note{display:flex;gap:16px;align-items:center;margin-top:16px;padding:14px 16px;border-radius:12px;background:#e2f3e9}
+.rq-note .big{font-size:2.6rem;font-weight:800;line-height:1}.rq-note .big small{font-size:1rem}.rq-note div{display:grid}
 .risk.major .thumb{height:140px}
 .risk.major h4{font-size:1.15rem}
 .risk.major .tag{background:#fde8eb;color:#c8102e}
@@ -560,7 +573,7 @@ const CONFIG = {
 };
 
 const CONTACTS = [
-  {r:"Sécurité, santé, environnement", n:"Romain Errard, SSE Manager", c:"rerrard@groupe-verdon.com"},
+  {r:"Sécurité, santé, environnement", n:"Romain Errard, SSE Manager", c:"06 72 01 26 07", c2:"rerrard@groupe-verdon.com"},
   {r:"Votre arrivée", n:"Accueil CICR", c:"03 44 75 73 00"},
   {r:"Questions RH", n:"Laura Ducoin, HR Business Partner", c:"06 01 06 31 50", c2:"LDucoin@groupe-verdon.com"}
 ];
@@ -679,7 +692,7 @@ const RISKS = {
     "CMR (cancérogènes, mutagènes, toxiques pour la reproduction) : mesures renforcées. Certaines expositions sont interdites pendant la grossesse : parlez-en au médecin du travail.",
     "Ne mangez pas, ne buvez pas, ne fumez pas en zone de travail. Lavez-vous les mains.",
     "Déversement : kit absorbant, puis prévenez votre responsable.",
-    "Produits fournis par CICR : les FDS sont présentes sur les chantiers, mises à disposition par vos responsables. Pas de FDS ? Contactez Romain Errard et/ou faites une remontée d'information."],
+    "Produits fournis par CICR : les FDS sont présentes sur les chantiers, mises à disposition par vos responsables. Pas de FDS ? Contactez Romain Errard (06 72 01 26 07) et/ou faites une remontée d'information."],
     stop:"Produit inconnu ou sans étiquette, EPI non disponibles."},
   amiante:{t:"Amiante", s:"Calorifuges, joints, tresses, plaques anciennes.", c:[
     "Interdite depuis 1997, l'amiante reste présente dans les installations anciennes.",
@@ -811,7 +824,7 @@ const S = {
   id:{nom:"",prenom:"",emailPerso:"",statut:"",agence:"",motif:"",poste:"",posteAutre:"",date:"",lieux:[],chantier:"",mineur:"",permis:"",rgpd:false},
   chap:0, slide:0, seen:{}, risksSeen:new Set(), chapDone:{},
   startedAt:null, courseDoneAt:null,
-  quiz:{order:[], i:0, answers:[], attempts:0, best:null, passed:false, done:false}, touch:{}, formsExtra:[], renfExtra:[], formsDet:{},
+  quiz:{order:[], i:0, answers:[], attempts:0, best:null, passed:false, done:false}, touch:{}, rq:{}, formsExtra:[], renfExtra:[], formsDet:{},
   forms:{}, parrainOk:false, eng:{a:false,b:false,c:false}, sig:null, finishedAt:null
 };
 const LIEUX = ["Atelier de Cambronne","Chantier client","Je ne sais pas"];
@@ -1091,7 +1104,7 @@ const CHAPTERS = [
  ]},
  {t:"Le site de Cambronne", c:"c-green", min:2, slides:[
   ()=>`<h3>Repérez-vous sur le site</h3>
-    <p class="lead">Touchez les points numérotés.</p>
+    <p class="lead">Vous pouvez toucher les points numérotés pour en savoir plus. Ce n'est pas obligatoire pour continuer.</p>
     <div class="plan" id="plan">${im("__plan","Vue en perspective du site CICR de Cambronne-lès-Ribécourt","plain")}
       ${PLAN_PTS.map((p,i)=>`<button class="hot" style="left:${p.x}%;top:${p.y}%" data-hot="${i}" aria-label="${esc(p.n)}">${i+1}</button>`).join("")}
     </div>
@@ -1165,17 +1178,19 @@ const CHAPTERS = [
       <span class="rmore"><span class="rf">${r.faits}</span><b>À retenir</b><span class="rl">${r.l.map(x=>`<span>${x}</span>`).join("")}</span></span>
       <span class="tap">Toucher pour lire</span></span></button>`).join("")}</div>`
  ]},
- {t:"Les risques de nos métiers", c:"c-yellow", min:6, risks:true, slides:[
+ {t:"Les risques de nos métiers", c:"c-yellow", min:8, risks:true, slides:[
+  ()=>viewRenforcee(),
   ()=>{ const t3=top3(), mine=(poste()?.risks||[]).filter(k=>!t3.includes(k)), left=t3.filter(k=>!S.risksSeen.has(k)).length;
     const card=(k,cls,tag)=>{const r=RISKS[k], seen=S.risksSeen.has(k); return `<button class="risk ${cls} ${seen?"seen":""}" data-risk="${k}"><span class="thumb">${riskVisual(k)}</span><span class="tag">${seen?"Lu":tag}</span><h4>${r.t}</h4><p>${r.s}</p></button>`;};
-    return `<h3>Les 3 risques majeurs de votre poste</h3>
-    <p class="lead">Pour <b>${esc(posteLabel())}</b>, ces trois risques sont les plus graves. Ouvrez et lisez chacune des trois fiches.</p>
+    return `<div class="renf-band"><span class="eyebrow">Accueil renforcé · partie théorique</span><span>La partie pratique se fait ensuite sur le terrain, avec votre chef d'équipe.</span></div>
+    <h3>Les 3 risques majeurs de votre poste</h3>
+    <p class="lead">Pour <b>${esc(posteLabel())}</b>, ces trois risques sont les plus graves. Ouvrez et lisez chacune des trois fiches : 2 questions sur chacun suivent.</p>
     <p class="hint" style="margin-bottom:12px">${left? `Encore ${left} fiche${left>1?"s":""} à lire.` : "Les 3 fiches sont lues."}</p>
     <div class="risks top3 stagger">${t3.map((k,i)=>card(k,"top","Risque majeur "+(i+1)+"/3")).join("")}</div>
     ${mine.length?`<h4 class="others-h">Les autres risques de votre poste</h4><div class="risks mine">${mine.map(k=>card(k,"","Votre poste")).join("")}</div>`:""}
     <h4 class="others-h">Les autres risques présents chez CICR</h4>
     <div class="risks others">${RISKS_ALL.filter(k=>!t3.includes(k)&&!mine.includes(k)).map(k=>card(k,"","Autre risque")).join("")}</div>`;},
-  ()=>viewRenforcee()
+  ()=>viewRQuiz()
  ]},
  {t:"Chasse aux risques", c:"c-yellow", min:4, slides:[
   ()=>{ const n=HUNT.found.size, done=n>=CONFIG.minHunt, show=HUNT.revealed;
@@ -1200,14 +1215,14 @@ const CHAPTERS = [
     <div class="epi-grid">${EPIS.map(e=>{const on=e.z.includes(EPI_ZONE);return `<div class="epi ${on?"":"off"}">${epiSvg(e.k)}<span class="when">${on?"Obligatoire":e.k==="masque"?"Selon analyse":"Selon tâche"}</span><b>${e.n}</b><span>${e.d}</span></div>`}).join("")}</div>
     <p class="hint" style="margin-top:12px">Sur les sites clients, leurs règles s'ajoutent : vêtements antistatiques, masque d'évacuation… Vos EPI vous sont remis et expliqués à votre arrivée. Un EPI abîmé se remplace, il ne se bricole pas.</p>`,
   ()=>`<h3>Le code couleur des panneaux</h3>
-    <p class="lead">Vous l'avez remarqué : chaque chapitre de cet accueil suit ces couleurs. Touchez chaque panneau pour l'agrandir.</p>
+    <p class="lead">Vous l'avez remarqué : chaque chapitre de cet accueil suit ces couleurs. Vous pouvez toucher un panneau pour l'agrandir.</p>
     <div class="signs stagger">
       ${[["s_interdit","Interdiction","Rouge et blanc, rond barré. Ce qu'on ne fait pas.","#c8102e"],
          ["s_oblig","Obligation","Bleu et blanc, rond. Ce qu'on doit faire ou porter.","#005eb8"],
          ["s_avert","Avertissement","Jaune et noir, triangle. Un danger est présent.","#f2c200"],
          ["s_secours","Secours","Vert et blanc. Premiers secours, douche, rinçage.","#008f45"],
          ["s_sortie","Évacuation","Vert et blanc. Sorties et issues de secours.","#008f45"],
-         ["s_incendie","Incendie","Rouge et blanc, carré. Extincteurs, alarme, RIA.","#c8102e"]].map(([k,t,d,c])=>`<figure class="sign" style="--sc:${c}" data-need="sign" data-nid="${k}">${im(k,"Panneaux "+t,"contain zoom")}<figcaption><b>${t}</b><span>${d}</span></figcaption></figure>`).join("")}
+         ["s_incendie","Incendie","Rouge et blanc, carré. Extincteurs, alarme, RIA.","#c8102e"]].map(([k,t,d,c])=>`<figure class="sign" style="--sc:${c}">${im(k,"Panneaux "+t,"contain zoom")}<figcaption><b>${t}</b><span>${d}</span></figcaption></figure>`).join("")}
     </div>`,
   ()=>`<h3>Les pictogrammes des produits chimiques</h3>
     <p class="lead">Règlement CLP. Touchez un pictogramme pour connaître sa signification.</p>
@@ -1338,23 +1353,65 @@ function viewObjectifs(){
     ${isInterim()?`<div class="callout good" style="margin-top:12px"><b>Intérimaire : ces objectifs sont aussi les vôtres pendant votre mission.</b><span>Vous pouvez remonter toutes les informations : situation dangereuse, presqu'accident, idée d'amélioration. C'est très bien vu, et ça compte dans les objectifs de l'équipe.</span></div>`:""}`;
 }
 
-/* ---------- formation renforcée ---------- */
+/* ---------- accueil renforcé ---------- */
 function viewRenforcee(){
   const p=poste(), rp=p?.rp, conc=renforcee();
-  const verdict = conc ? `<div class="callout warn"><b>Oui, vous êtes concerné.</b><span>Vous êtes ${esc(S.id.statut.toLowerCase())} sur un poste à risques particuliers (${esc(posteLabel())}).</span></div>`
-    : rp ? `<div class="callout info"><b>Pas au sens de la loi, car vous êtes en ${esc(S.id.statut)}.</b><span>Votre poste est à risques particuliers : vous suivez la formation au poste avec votre parrain tuteur.</span></div>`
-    : `<div class="callout info"><b>Non.</b><span>Votre poste ne figure pas sur la liste des postes à risques particuliers. Vous suivez la formation pratique au poste à votre arrivée.</span></div>`;
-  return `<h3>Formation renforcée : êtes-vous concerné ?</h3>
-    <p class="lead">Certains postes de nos métiers présentent des risques particuliers. La loi prévoit alors un accueil et une formation renforcés.</p>
-    ${verdict}
-    <div class="cols stagger" style="margin-top:16px">
-      <div class="tile"><h4>Qui ?</h4><p>Les salariés en CDD, les intérimaires et les stagiaires affectés à un poste à risques particuliers <span class="ref">L4154-2</span>. Chez CICR Verdon, la démarche MASE l'étend aux apprentis. Les moins de 18 ans ont en plus leurs propres règles.</p></div>
-      <div class="tile"><h4>Quels postes ?</h4><p>La liste est établie par l'employeur après avis du médecin du travail et du CSE. Chez CICR : soudeur, tuyauteur, chaudronnier, monteur / mécanicien, encadrant de chantier, logisticien (conduite d'engins).</p></div>
-      <div class="tile"><h4>Comment ?</h4><p>Votre chef d'équipe va vous surveiller et vous accompagner afin de définir vos éventuels besoins et de réaliser un accueil renforcé par l'accompagnement. Il est renouvelé à chaque mission et tracé sur votre fiche d'accueil.</p></div>
+  const verdict = conc ? `<div class="callout warn"><b>Vous êtes concerné au sens de la loi.</b><span>Vous êtes ${esc(S.id.statut.toLowerCase())} sur un poste à risques particuliers (${esc(posteLabel())}) : l'accueil renforcé est obligatoire <span class="ref">L4154-2</span>.</span></div>`
+    : rp ? `<div class="callout info"><b>Votre poste est à risques particuliers.</b><span>Chez CICR Verdon, vous suivez le même accueil renforcé, même en ${esc(S.id.statut)}.</span></div>`
+    : `<div class="callout info"><b>Chez CICR Verdon, tout le monde le suit.</b><span>Même si votre poste ne figure pas sur la liste des postes à risques particuliers.</span></div>`;
+  return `<h3>L'accueil renforcé</h3>
+    <p class="lead">Avant de découvrir les risques de nos métiers : chaque arrivant suit un accueil renforcé sur les 3 risques majeurs de son poste. Il se fait en deux temps.</p>
+    <div class="renf-steps stagger">
+      <div class="renf-step"><span class="rs-n">1</span><div><span class="eyebrow">Maintenant, en ligne</span><h4>Partie théorique</h4><p>Vous lisez les fiches des <b>3 risques majeurs de votre poste</b>, puis vous répondez à <b>2 questions sur chacun</b>. Vous obtenez une note sur 10, inscrite sur votre attestation.</p></div></div>
+      <div class="renf-step"><span class="rs-n">2</span><div><span class="eyebrow">À votre arrivée, sur le terrain</span><h4>Partie pratique avec votre chef d'équipe</h4><p>Votre chef d'équipe va vous surveiller et vous accompagner afin de définir vos éventuels besoins et de réaliser un accueil renforcé par l'accompagnement. Votre parrain tuteur vous aide au quotidien.</p></div></div>
     </div>
-    ${conc?`<div class="callout good" style="margin-top:16px"><b>La partie théorique de votre accueil renforcé est faite.</b><span>En ouvrant les fiches des risques propres à votre poste, vous avez vu ce qu'il faut savoir avant d'arriver. Il reste la partie pratique, sur place.</span></div>`:""}
-    ${conc?`<div class="callout info" style="margin-top:14px"><b>Sur place</b><span>Votre chef d'équipe va vous surveiller et vous accompagner afin de définir vos éventuels besoins et de réaliser un accueil renforcé par l'accompagnement.</span></div>`:""}`;
+    ${verdict}
+    <div class="cols" style="margin-top:14px">
+      <div class="tile"><h4>Qui est concerné par la loi ?</h4><p>Les CDD, intérimaires et stagiaires sur un poste à risques particuliers. Chez CICR : soudeur, tuyauteur, chaudronnier, monteur / mécanicien, encadrant de chantier, logisticien (conduite d'engins). La démarche MASE l'étend aux apprentis.</p></div>
+      <div class="tile"><h4>Renouvelé à chaque mission</h4><p>L'accueil renforcé est tracé sur votre attestation et sur la fiche d'accueil remplie à votre arrivée.</p></div>
+    </div>`;
 }
+
+/* ---------- questionnaire de l'accueil renforcé (2 questions par risque majeur) ---------- */
+const RQ = {
+  soudage:[{q:"Vous devez meuler chez un client, hors de la zone de soudage. Que vous faut-il avant de commencer ?",o:["Un permis de feu, les combustibles écartés et un extincteur à portée de main","Rien, si l'opération dure moins de 10 minutes","Seulement l'accord oral d'un collègue"],a:0,e:"Tout point chaud hors zone de soudage demande un permis de feu, des combustibles écartés ou protégés et un extincteur adapté."},
+           {q:"Les fumées de soudage, surtout sur l'inox, sont :",o:["Cancérogènes : captage à la source et ventilation d'abord, masque en complément","Sans danger à l'extérieur","Seulement gênantes pour les yeux"],a:0,e:"Les fumées de soudage sont classées cancérogènes (CIRC groupe 1) ; l'inox dégage du chrome VI."}],
+  hauteur:[{q:"Vous devez travailler à 4 m de haut. Quel moyen privilégier ?",o:["Une protection collective : échafaudage réceptionné, nacelle ou PIRL","Une échelle, c'est plus rapide","Un escabeau posé sur une table"],a:0,e:"La protection collective passe d'abord. L'échelle n'est qu'un moyen d'accès, l'escabeau un dernier recours sur dérogation."},
+           {q:"L'échafaudage n'a pas de fiche d'autorisation d'accès affichée. Que faites-vous ?",o:["Je n'y monte pas et je préviens mon chef d'équipe","J'y monte si je fais attention","Je demande à un collègue s'il l'a déjà utilisé"],a:0,e:"On ne monte que sur un échafaudage réceptionné. Sans fiche d'autorisation : STOP."}],
+  chimique:[{q:"Avant d'utiliser un produit chimique, que consultez-vous ?",o:["L'étiquette et la fiche de données de sécurité (FDS)","Rien, je le sens d'abord","Le prix sur le bidon"],a:0,e:"L'étiquette et la FDS disent les dangers et les EPI à porter (gants, lunettes, masque)."},
+            {q:"Il vous reste un peu de dégraissant. Où le mettez-vous ?",o:["Dans son emballage d'origine étiqueté","Dans une bouteille d'eau vide","Dans un seau ouvert"],a:0,e:"Jamais de produit dans un contenant alimentaire : il reste dans son emballage d'origine étiqueté."}],
+  levage:[{q:"Que faut-il pour conduire un engin (chariot, pont roulant, nacelle) ?",o:["Le CACES ou une formation, l'aptitude médicale et l'autorisation de conduite délivrée par CICR","Le permis B suffit","Avoir déjà vu quelqu'un le faire"],a:0,e:"Les trois sont nécessaires : formation (CACES), aptitude médicale et autorisation de conduite."},
+          {q:"Une charge est en cours de levage. Où vous placez-vous ?",o:["Hors de la zone balisée, jamais sous la charge","Dessous, pour la guider à la main","Sur la charge pour l'équilibrer"],a:0,e:"Personne sous la charge, jamais. Elle se guide à distance avec un cordage."}],
+  conso:[{q:"Avant d'ouvrir une bride sur une tuyauterie, vous devez :",o:["Avoir la confirmation que la ligne est consignée, vidangée, purgée et à pression atmosphérique","L'ouvrir doucement pour voir s'il reste du produit","Demander à n'importe quel collègue si c'est bon"],a:0,e:"Jamais d'ouverture de bride sans confirmation de la consignation et de l'absence de pression."},
+         {q:"Qui peut retirer le cadenas de consignation que vous avez posé ?",o:["Vous seul","Le premier qui a fini","N'importe quel collègue de l'équipe"],a:0,e:"Chacun pose son propre cadenas, et personne d'autre que lui ne le retire."}],
+  machines:[{q:"Le carter de la meuleuse gêne votre travail. Que faites-vous ?",o:["Je le garde en place et je demande un outil adapté","Je le retire le temps de l'opération","Je le scotche en position ouverte"],a:0,e:"On ne neutralise jamais une sécurité : carter, arrêt d'urgence, barrage immatériel."},
+            {q:"Avant de changer le disque d'une meuleuse :",o:["Je la débranche","Je la laisse tourner au ralenti","Je mets juste le bouton sur arrêt"],a:0,e:"On débranche toujours avant de changer un disque, une lame ou un foret."}],
+  manu:[{q:"Vous devez déplacer un tube de 40 kg. Quel est le bon réflexe ?",o:["Utiliser un moyen de manutention (chariot, palan) ou porter à deux","Le porter seul en forçant sur les bras","Le traîner au sol"],a:0,e:"D'abord éviter de porter : au-delà d'environ 25 kg, on mécanise ou on porte à deux."},
+        {q:"Pour soulever une charge, la bonne posture est :",o:["Près de la charge, dos droit, jambes fléchies","Jambes tendues, dos courbé","Bras tendus, loin du corps"],a:0,e:"Près de la charge, dos droit, jambes fléchies, prises fermes."}],
+  route:[{q:"Votre téléphone sonne pendant que vous conduisez vers un chantier :",o:["Je ne réponds pas, même avec une oreillette, et je rappelle à l'arrêt","Je réponds avec l'oreillette","Je réponds si c'est mon chef"],a:0,e:"Téléphone interdit en conduisant, oreillette comprise."},
+         {q:"Sur un long trajet, la règle est :",o:["Une pause toutes les 2 heures","Rouler d'une traite pour arriver plus tôt","S'arrêter seulement en cas de panne"],a:0,e:"Pause toutes les 2 heures : la fatigue est une cause majeure d'accident."}],
+  orga:[{q:"Quelle est l'une des premières causes d'accident ?",o:["Les chutes de plain-pied","Les piqûres d'insectes","Le bruit des bureaux"],a:0,e:"Les chutes de plain-pied sont parmi les premières causes d'accident : zone rangée, câbles et flexibles rangés."},
+        {q:"Une autre entreprise travaille dans la même zone que vous. Que respectez-vous ?",o:["Le plan de prévention (ou PPSPS) et leurs balisages","Rien de particulier","Seulement mes propres consignes"],a:0,e:"En coactivité, le plan de prévention ou le PPSPS fixe les règles communes et les balisages."}],
+  ecran:[{q:"Où placer le haut de votre écran ?",o:["Au niveau des yeux, à une longueur de bras","Au-dessus de la tête","Le plus près possible des yeux"],a:0,e:"Haut de l'écran au niveau des yeux, à une longueur de bras."},
+         {q:"Vous avez des douleurs persistantes au poste de travail. Que faites-vous ?",o:["J'en parle au médecin du travail","J'attends que ça passe","Je prends des antidouleurs sans rien dire"],a:0,e:"Douleurs persistantes : parlez-en au médecin du travail."}],
+  rayon:[{q:"Une zone est balisée avec un trèfle et de la rubalise pour une gammagraphie :",o:["Je ne la franchis jamais","Je la traverse rapidement","Je déplace le balisage pour passer"],a:0,e:"La zone balisée ne se franchit jamais. Un balisage abîmé ou déplacé se signale."},
+         {q:"Quand ont souvent lieu les tirs radio ?",o:["La nuit ou pendant les pauses : je respecte les horaires annoncés","Jamais sur nos chantiers","Uniquement le lundi matin"],a:0,e:"Les tirs ont souvent lieu la nuit ou pendant les pauses : respectez les horaires annoncés."}]
+};
+function rqOrder(q){ let h=0; for(const c of q.id+q.q) h=(h*31+c.charCodeAt(0))>>>0; const idx=q.o.map((_,i)=>i), r=h%idx.length; return idx.slice(r).concat(idx.slice(0,r)); }
+function rqItems(){ const out=[]; top3().forEach(k=>(RQ[k]||[]).forEach((q,i)=>out.push({...q,id:k+":"+i,k}))); return out; }
+function rqNote(){ const it=rqItems(); if(!it.length) return null; const ok=it.filter(q=>S.rq[q.id]===q.a).length; return Math.round(ok/it.length*10); }
+function viewRQuiz(){
+  const it=rqItems(), done=it.length&&it.every(q=>S.rq[q.id]!==undefined), note=rqNote();
+  let lastK="";
+  return `<div class="renf-band"><span class="eyebrow">Accueil renforcé · partie théorique</span><span>La partie pratique se fait ensuite sur le terrain, avec votre chef d'équipe.</span></div>
+    <h3>Vos 3 risques majeurs : 2 questions sur chacun</h3>
+    <p class="lead">Répondez aux ${it.length} questions. La bonne réponse s'affiche après chaque choix. Votre note sur 10 figurera sur votre attestation.</p>
+    <div id="rquiz" class="rquiz">${it.map(q=>{ const head=q.k!==lastK?`<h4 class="rq-risk">${RISKS[q.k].t}</h4>`:""; lastK=q.k; const ans=S.rq[q.id];
+      return head+`<div class="rq" data-rq="${q.id}"><p class="q">${q.q}</p><div class="opts">${rqOrder(q).map(i=>{ const o=q.o[i]; return `<button class="opt ${ans!==undefined?(i===q.a?"ok":i===ans?"ko":""):""}" data-rqa="${q.id}|${i}" ${ans!==undefined?"disabled":""}>${o}</button>`; }).join("")}</div>${ans!==undefined?`<p class="rq-fb ${ans===q.a?"good":"bad"}"><b>${ans===q.a?"Bonne réponse.":"Pas tout à fait."}</b> ${q.e}</p>`:""}</div>`; }).join("")}</div>
+    ${done?`<div class="rq-note"><span class="big">${note}<small>/10</small></span><div><b>Votre note d'accueil renforcé</b><span>${note>=8?"Très bien, vous connaissez les risques majeurs de votre poste.":note>=5?"Relisez les points en rouge : votre chef d'équipe y reviendra avec vous sur le terrain.":"Relisez bien les fiches : votre chef d'équipe reprendra ces points avec vous dès votre arrivée."}</span></div></div>
+    <div class="callout info" style="margin-top:12px"><b>Prochaine étape, sur le terrain</b><span>Votre chef d'équipe va vous surveiller et vous accompagner afin de définir vos éventuels besoins et de réaliser un accueil renforcé par l'accompagnement.</span></div>`:""}`;
+}
+document.addEventListener("click",e=>{ const b=e.target.closest("[data-rqa]"); if(!b||b.disabled) return; const [id,i]=b.dataset.rqa.split("|"); if(S.rq[id]!==undefined) return; S.rq[id]=+i; const y=window.scrollY; NOANIM=true; render(); NOANIM=false; window.scrollTo({top:y}); });
 
 /* ---------- surbrillance + blocage (V4) ---------- */
 function updateGate(){
@@ -1365,12 +1422,13 @@ function updateGate(){
   const need=new Set(needEls.map(e=>e.dataset.need+":"+e.dataset.nid));
   const miss=[...need].filter(k=>!T.has(k)).length;
   const ch=CHAPTERS[S.chap];
-  const req=(ch.risks && S.slide===0) ? top3() : [];
+  const req=(ch.risks && S.slide===1) ? top3() : [];
   const leftRisks=req.filter(k=>!S.risksSeen.has(k)).length;
-  const hunt=!!$("#hunt"), evac=!!$("#evac"), tri=!!$("#trigame"), cases=[...document.querySelectorAll("#app .case")];
-  const hadReq = need.size || req.length || hunt || evac || tri || cases.length;
+  const hunt=!!$("#hunt"), evac=!!$("#evac"), tri=!!$("#trigame"), cases=[...document.querySelectorAll("#app .case")].filter(c=>c.dataset.case!=="c2"); /* plan du site : facultatif */
+  const hadReq = need.size || req.length || hunt || evac || tri || cases.length || !!$("#rquiz");
   let m="";
   if(hunt && HUNT.found.size<CONFIG.minHunt) m=`Trouvez au moins ${CONFIG.minHunt} risques en touchant l'image (${HUNT.found.size}/${CONFIG.minHunt}).`;
+  const rqz=$("#rquiz"); if(!m && rqz){ const n=rqItems().filter(q=>S.rq[q.id]!==undefined).length; if(n<rqItems().length) m=`Répondez aux ${rqItems().length} questions de l'accueil renforcé (${n}/${rqItems().length}).`; }
   if(!m && leftRisks) m=`Lisez les 3 fiches encadrées en rouge : ce sont les risques majeurs de votre poste (encore ${leftRisks}).`;
   if(!m && evac && !T.has("evac:done")) m="Faites défiler les étapes de l'évacuation avec le bouton surligné.";
   if(!m && tri && !T.has("tri:done")) m="Complétez le triangle du feu : touchez un mot, puis le côté qui lui correspond.";
@@ -1392,6 +1450,7 @@ function updateGate(){
     document.querySelectorAll("#trigame .tz:not(.ok)").forEach(e=>e.classList.toggle("hl", !done && !!TRI_G.sel)); }
   cases.forEach(c=>{ const ans=T.has("case:"+c.dataset.case); c.querySelectorAll(".opt").forEach(o=>o.classList.toggle("hl",!ans)); });
   if(hunt) $("#hunt").classList.toggle("hl", HUNT.found.size<CONFIG.minHunt);
+  document.querySelectorAll("#rquiz .rq").forEach(q=>q.querySelectorAll(".opt").forEach(o=>o.classList.toggle("hl", S.rq[q.dataset.rq]===undefined)));
 }
 function hlStep(){
   const tog=(el,on)=>el&&el.classList.toggle("hl",!!on);
@@ -1417,7 +1476,7 @@ function hlStep(){
 const ADM = {bytes:null, name:"", pages:0, nom:"Romain Errard", fonction:"SSE Manager", decision:"Validé", comment:"", sig:null, msg:""};
 function loadPdfLib(){
   if(window.PDFLib) return Promise.resolve();
-  return new Promise((ok,ko)=>{ const s=document.createElement("script"); s.src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"; s.onload=ok; s.onerror=ko; document.head.appendChild(s); });
+  return new Promise((ok,ko)=>{ const s=document.createElement("script"); s.src="/vendor/pdf-lib.min.js"; s.onload=ok; s.onerror=ko; document.head.appendChild(s); });
 }
 function viewAdmin(){
   const ready = ADM.bytes && ADM.sig;
@@ -1606,7 +1665,7 @@ function viewPoste(err){
     ${err?`<p class="err" style="margin-top:10px">${err}</p>`:""}
     ${renforcee()?`<div class="panel" style="margin-top:18px;display:grid;gap:14px">
       <div><span class="eyebrow">Accueil renforcé à la sécurité</span><h3 style="font-size:1.8rem;text-transform:uppercase;margin-top:4px">Ce qui est fait, ce qui reste</h3></div>
-      <div class="callout good"><b>Partie théorique faite en ligne.</b><span>Vous avez lu les ${nRisk} fiches des risques propres à votre poste.</span></div>
+      <div class="callout good"><b>Partie théorique faite en ligne.</b><span>Vous avez lu les fiches des 3 risques majeurs de votre poste et obtenu ${rqNote()??"—"}/10 aux questions.</span></div>
       <div class="callout info"><b>Sur place</b><span>Votre chef d'équipe va vous surveiller et vous accompagner afin de définir vos éventuels besoins et de réaliser un accueil renforcé par l'accompagnement.</span></div>
       <div class="prat">${S.renfExtra.map((f,i)=>`<div><b>${esc(f)}</b>Formation complémentaire <button class="btn ghost small" data-rmrenf="${i}" style="margin-top:6px">Retirer</button></div>`).join("")}</div>
       <div class="add-row"><input id="f-renf" placeholder="Ajouter une formation renforcée complémentaire"><button class="btn ghost small" data-act="addRenf">Ajouter</button></div>
@@ -1654,7 +1713,7 @@ function viewAttest(){
       <div><span>Poste</span><b>${esc(posteLabel())}</b></div>
       <div><span>Arrivée</span><b>${fmtDate(S.id.date)}</b></div>
       <div><span>Questionnaire</span><b>${sc}/${QUIZ.length} · ${S.quiz.attempts} tentative${S.quiz.attempts>1?"s":""}</b></div>
-      <div><span>Formation renforcée</span><b>${renforcee()?"Oui, sur place":"Non concerné"}</b></div>
+      <div><span>Accueil renforcé (théorie)</span><b>${rqNote()??"—"}/10</b></div>
     </div>
     <div class="panel" style="margin-top:18px;display:grid;gap:12px">
       <label class="check-line"><input type="checkbox" data-eng="a" ${S.eng.a?"checked":""}><span>J'ai suivi l'intégralité de l'accueil sécurité et compris les consignes présentées.</span></label>
@@ -1713,7 +1772,7 @@ const pdfTxt = s => String(s??"").replace(/[’‘]/g,"'").replace(/[“”«»]
 async function buildPdf(){
   const { jsPDF } = window.jspdf;
   const doc = new jsPDF({unit:"mm",format:"a4"});
-  try{ const d0=S.id, pl={v:1,nom:d0.nom,prenom:d0.prenom,emailPerso:d0.emailPerso,statut:d0.statut,agence:d0.agence,motif:d0.motif,poste:d0.poste,posteLabel:posteLabel(),date:d0.date,lieux:d0.lieux,chantier:d0.chantier,mineur:d0.mineur,quiz:quizScore(),tentatives:S.quiz.attempts,renforcee:renforcee(),fin:S.finishedAt?S.finishedAt.toISOString():""};
+  try{ const d0=S.id, pl={v:1,nom:d0.nom,prenom:d0.prenom,emailPerso:d0.emailPerso,statut:d0.statut,agence:d0.agence,motif:d0.motif,poste:d0.poste,posteLabel:posteLabel(),date:d0.date,lieux:d0.lieux,chantier:d0.chantier,mineur:d0.mineur,quiz:quizScore(),tentatives:S.quiz.attempts,renforcee:renforcee(),rq:rqNote(),risques:top3().map(k=>RISKS[k].t),fin:S.finishedAt?S.finishedAt.toISOString():""};
     doc.setProperties({title:"Attestation accueil sécurité CICR Verdon", subject:"CICRACCUEIL1:"+btoa(unescape(encodeURIComponent(JSON.stringify(pl))))}); }catch(_){ }
   const W=210, M=16; let y=0;
   const T=(s,x,yy,o)=>doc.text(pdfTxt(s),x,yy,o);
@@ -1741,7 +1800,7 @@ async function buildPdf(){
   kv([["Début / fin",S.startedAt.toLocaleString("fr-FR")+"  ->  "+S.finishedAt.toLocaleString("fr-FR")],["Durée du module",dur],["Chapitres suivis",CHAPTERS.map((c,i)=>(i+1)+". "+c.t).join(" / ")],["Fiches risques lues",[...S.risksSeen].map(k=>RISKS[k].t).join(", ")]]);
   para("Contenu couvert : organisation de l'entreprise, règlement intérieur, accès au document unique, PDP / PPSPS / permis de travail, conduite à tenir en cas d'accident, d'incendie, d'évacuation, de déversement, droit d'alerte et de retrait, circulation sur le site, politique SSE et 7 règles, remontées SSE, REx, risques du poste, EPI, signalisation, pictogrammes CLP, environnement, rôle du service de santé au travail et des représentants du personnel.",8.5);
   sec("Contrôle des connaissances");
-  kv([["Résultat",sc+" / "+QUIZ.length+" ("+Math.round(sc/QUIZ.length*100)+" %) - minimum 10/15 - VALIDÉ"],["Tentatives",String(S.quiz.attempts)]]);
+  kv([["Résultat",sc+" / "+QUIZ.length+" ("+Math.round(sc/QUIZ.length*100)+" %) - minimum 10/15 - VALIDÉ"],["Tentatives",String(S.quiz.attempts)],["Accueil renforcé",(rqNote()??"-")+" / 10 aux questions sur les 3 risques majeurs du poste ("+top3().map(k=>RISKS[k].t).join(", ")+")"]]);
   const missed=S.quiz.order.filter((it,i)=>S.quiz.answers[i]!==QUIZ[it.qi].a).map(it=>QUIZ[it.qi].q);
   if(missed.length) kv([["Points à revoir",missed.join(" / ")]]);
   const it=isInterim();
@@ -1750,7 +1809,7 @@ async function buildPdf(){
   S.formsExtra.forEach(f=>{ doc.setFont("helvetica","bold"); para("Autre formation déclarée : "+f+" : Oui"); doc.setFont("helvetica","normal"); });
   if(it){ doc.setTextColor(90); para("Les justificatifs des formations déclarées « Oui » pourront être demandés à l'agence "+(S.id.agence||"d'intérim")+".",8.5); doc.setTextColor(0); }
   y+=1;
-  if(renforcee()){ sec("Accueil renforcé à la sécurité (art. L4154-2)"); kv([["Partie théorique","Réalisée en ligne : risques propres au poste lus ("+(p.risks||[]).filter(k=>S.risksSeen.has(k)).length+" fiches)"],["Partie pratique","Sur place, avec le parrain tuteur (voir page suivante)"]]); }
+  sec("Accueil renforcé à la sécurité"+(renforcee()?" (art. L4154-2)":"")); kv([["Partie théorique","Réalisée en ligne : 3 risques majeurs du poste lus, questionnaire "+(rqNote()??"-")+"/10"],["Partie pratique","Sur le terrain, avec le chef d'équipe (voir page suivante)"]]);
   sec("Engagements et signature");
   para("Je soussigné(e) atteste avoir suivi l'intégralité de l'accueil sécurité, compris les consignes présentées, et m'engage à respecter la politique SSE, les 7 règles essentielles, le règlement intérieur et les consignes des sites clients. Je sais qu'un parrain tuteur me sera présenté à mon arrivée, ainsi que ma formation au poste"+(renforcee()?" et ma formation renforcée à la sécurité.":"."));
   if(y>263){doc.addPage();head("Attestation d'accueil sécurité (suite)");}
@@ -1785,7 +1844,7 @@ async function sendToSSE(){
   try{
     const doc=await buildPdf(); const blob=doc.output("blob"); const d=S.id;
     const name=pdfTxt(`Attestation-accueil-securite_${d.nom}_${d.prenom}_${(d.date||"").replace(/-/g,"")}.pdf`).replace(/[^\w.\-]+/g,"_");
-    const pl={v:1,nom:d.nom,prenom:d.prenom,emailPerso:d.emailPerso,statut:d.statut,agence:d.agence,motif:d.motif,poste:d.poste,posteLabel:posteLabel(),date:d.date,lieux:d.lieux,chantier:d.chantier,mineur:d.mineur,quiz:quizScore(),tentatives:S.quiz.attempts,renforcee:renforcee(),fin:S.finishedAt.toISOString()};
+    const pl={v:1,nom:d.nom,prenom:d.prenom,emailPerso:d.emailPerso,statut:d.statut,agence:d.agence,motif:d.motif,poste:d.poste,posteLabel:posteLabel(),date:d.date,lieux:d.lieux,chantier:d.chantier,mineur:d.mineur,quiz:quizScore(),tentatives:S.quiz.attempts,renforcee:renforcee(),rq:rqNote(),risques:top3().map(k=>RISKS[k].t),fin:S.finishedAt.toISOString()};
     const fd=new FormData(); fd.append("payload",JSON.stringify(pl)); fd.append("attestation",new File([blob],name,{type:"application/pdf"}));
     const r=await fetch("/api/accueil",{method:"POST",body:fd}); if(!r.ok) throw new Error(r.status);
     S.sendState="ok";
@@ -1859,7 +1918,7 @@ document.addEventListener("click",async e=>{
     case "evac": if(EVAC<6){ EVAC++; if(EVAC>=6) touch("evac:done"); NOANIM=true; render(); NOANIM=false; } break;
     case "qnext": if(S.quiz.i<QUIZ.length-1){ S.quiz.i++; } else { S.quiz.done=true; const sc=quizScore(); S.quiz.best=Math.max(S.quiz.best??0,sc); S.quiz.passed=sc>=CONFIG.minQuiz; } render(); window.scrollTo({top:0,behavior:"smooth"}); break;
     case "retryQuiz": startQuiz(); render(); break;
-    case "redoCourse": S.touch={}; HUNT.found=new Set(); HUNT.order=[]; HUNT.revealed=false; EVAC=1; TRI_G.placed={}; TRI_G.sel=null; S.risksSeen=new Set(); S.seen={}; S.chapDone={}; S.chap=0; S.slide=0; S.courseDoneAt=null; S.quiz.order=[]; S.quiz.done=false; S.quiz.answers=[]; S.maxStep=2; go(2); break;
+    case "redoCourse": S.touch={}; HUNT.found=new Set(); HUNT.order=[]; HUNT.revealed=false; EVAC=1; TRI_G.placed={}; TRI_G.sel=null; S.risksSeen=new Set(); S.rq={}; S.seen={}; S.chapDone={}; S.chap=0; S.slide=0; S.courseDoneAt=null; S.quiz.order=[]; S.quiz.done=false; S.quiz.answers=[]; S.maxStep=2; go(2); break;
     case "reviewCourse": S.chap=0; S.slide=0; go(2); break;
     case "toPoste": go(4); break;
     case "back3": go(3); break;
