@@ -1,6 +1,6 @@
 import { getStore } from "@netlify/blobs";
 import type { Config, Context } from "@netlify/functions";
-import { mailFor, renderText, sendMail, processDossier, mailConfigured, STEPS } from "../lib/mails.mts";
+import { mailFor, renderText, renderHtml, siteUrl, sendMail, processDossier, mailConfigured, STEPS } from "../lib/mails.mts";
 
 /* API de l'espace SSE CICR Verdon.
    Public : POST /api/accueil (fin d'accueil), POST /api/q (questionnaires), POST /api/login.
@@ -140,7 +140,7 @@ export default async (req: Request, _context: Context) => {
       const m = mailFor(d, p[2], settings);
       if (!m) return json({ error: "mail" }, 404);
       if ((p[2] === "mailParrain" || p[2] === "p1m") && !d.parrain?.nom) return json({ error: "parrain" }, 409);
-      if (req.method === "GET") return json({ to: m.to || "", subject: m.subject, text: renderText(m), mailOk: mailConfigured() });
+      if (req.method === "GET") return json({ to: m.to || "", subject: m.subject, text: renderText(m), html: renderHtml(m, siteUrl(settings) || new URL(req.url).origin), mailOk: mailConfigured() });
       if (req.method === "POST") {
         d.steps = d.steps || {}; const s = d.steps[p[2]] || (d.steps[p[2]] = {});
         try { await sendMail(m); s.sentAt = new Date().toISOString(); delete s.error; delete s.tries; }

@@ -87,6 +87,12 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--surface-2)}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b2127;color:#fff;padding:10px 16px;border-radius:10px;z-index:60;font-size:.9rem}
 .mono{font-family:var(--fm);font-size:.8rem}
 @media (max-width:760px){.grid2{grid-template-columns:1fr}.task{grid-template-columns:1fr}.prow{grid-template-columns:1fr}}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#e4003a;margin-right:6px;vertical-align:middle}
+.msteps{margin:0;padding:0;list-style:none;display:grid;gap:8px;counter-reset:ms}
+.msteps li{counter-increment:ms;display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
+.msteps li::before{content:counter(ms);width:26px;height:26px;border-radius:50%;background:var(--action);color:var(--action-ink);display:grid;place-items:center;font-weight:700;font-size:.85rem}
+@media (max-width:560px){.msteps li{grid-template-columns:28px 1fr}.msteps li>.btn,.msteps li>a{grid-column:2}}
+.mprev{display:grid;gap:6px}.mprev iframe{width:100%;min-height:360px;border:1px solid var(--line);border-radius:10px;background:#fff}
 </style>
 
 <header class="top"><div class="top-in">
@@ -126,7 +132,8 @@ function toast(m){ const t=document.createElement("div"); t.className="toast"; t
 function stepState(d,st){
   const s=(d.steps||{})[st.k]||{};
   if(st.form ? s.doneAt : s.sentAt) return {state:"ok", s};
-  if(!d.parrain?.nom && st.to==="parrain") return {state:"blocked", s};
+  if(!d.parrain?.nom && (st.to==="parrain" || st.k==="mailArrivant")) return {state:"blocked", s};
+  if(st.d===0) return {state:"now", due:today(), diff:0, s}; /* bienvenue et parrain : à envoyer dès la désignation */
   const due=addDays(d.date||new Date().toISOString().slice(0,10), st.d);
   if(st.form && s.sentAt) return {state:"wait", due, s};
   const diff=Math.round((due-today())/864e5);
@@ -150,10 +157,17 @@ function tasks(){
 }
 
 /* ===================== Mails (rédigés et envoyés par le site) ===================== */
+function fillFrame(){ const f=$("#mframe"); if(!f||!S.mailPrev?.html) return; f.srcdoc=`<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;padding:12px;background:#fff}</style></head><body>${S.mailPrev.html}</body></html>`; f.onload=()=>{ try{ f.style.height=(f.contentDocument.body.scrollHeight+30)+"px"; }catch(_){ } }; }
+async function copyHtml(btn){
+  const P=S.mailPrev; if(!P) return;
+  try{ await navigator.clipboard.write([new ClipboardItem({"text/html":new Blob([P.html],{type:"text/html"}),"text/plain":new Blob([P.text],{type:"text/plain"})})]); btn.textContent="Copié ✓"; toast("Mail copié : collez-le dans Outlook avec Ctrl+V."); return; }catch(_){ }
+  try{ const d=document.createElement("div"); d.contentEditable="true"; d.style.cssText="position:fixed;left:-9999px;top:0"; d.innerHTML=P.html; document.body.appendChild(d); const r=document.createRange(); r.selectNodeContents(d); const sel=getSelection(); sel.removeAllRanges(); sel.addRange(r); const ok=document.execCommand("copy"); sel.removeAllRanges(); d.remove(); if(ok){ btn.textContent="Copié ✓"; toast("Mail copié : collez-le dans Outlook avec Ctrl+V."); return; } }catch(_){ }
+  toast("Copie impossible ici : utilisez « Copier en texte simple ».");
+}
 async function openMail(id,k){
   S.mail={id,k}; S.mailPrev=null; $("#sheet").innerHTML=vMail(S.dossiers.find(x=>x.id===id),k);
   try{ const r=await api("mail/"+encodeURIComponent(id)+"/"+k); S.mailPrev=await r.json(); }catch(e){ S.mailPrev={err:e.code==="http"?"Désignez d'abord le parrain tuteur.":"Aperçu indisponible."}; }
-  if(S.mail&&S.mail.id===id) $("#sheet").innerHTML=vMail(S.dossiers.find(x=>x.id===id),k);
+  if(S.mail&&S.mail.id===id){ $("#sheet").innerHTML=vMail(S.dossiers.find(x=>x.id===id),k); fillFrame(); }
 }
 
 /* ===================== Base de données (site) ===================== */
@@ -184,9 +198,15 @@ async function boot(){ await load(false); clearInterval(window.__poll); window._
 function download(blob,name){ name=String(name).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\w.\-]+/g,"_"); const u=URL.createObjectURL(blob),a=document.createElement("a"); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),4000); }
 
 /* ===================== Rendu ===================== */
+function setFavicon(n){
+  try{ const c=document.createElement("canvas"); c.width=c.height=64; const x=c.getContext("2d");
+    x.fillStyle="#2c3c9c"; x.beginPath(); x.roundRect(4,4,56,56,14); x.fill(); x.fillStyle="#fff"; x.font="bold 30px Arial"; x.textAlign="center"; x.textBaseline="middle"; x.fillText("SSE".slice(0,1),32,34);
+    if(n){ x.fillStyle="#e4003a"; x.beginPath(); x.arc(48,16,15,0,7); x.fill(); x.fillStyle="#fff"; x.font="bold 20px Arial"; x.fillText(n>9?"9+":String(n),48,17); }
+    let l=document.querySelector('link[rel="icon"]'); if(!l){ l=document.createElement("link"); l.rel="icon"; document.head.appendChild(l); } l.href=c.toDataURL("image/png"); }catch(_){ }
+}
 function renderTabs(){
   const n=tasks().filter(t=>t.cls!=="t-soon").length;
-  document.title = (n?`(${n}) `:"")+"Espace SSE CICR Verdon";
+  document.title = (n?`(${n}) `:"")+"Espace SSE CICR Verdon"; setFavicon(n);
   const T=[["todo","À faire",n],["dossiers","Arrivants"],["import","Basculer une attestation"],["parrains","Parrains tuteurs"],["reglages","Réglages"]];
   $("#tabs").innerHTML=T.map(([k,l,c])=>`<button class="tab" data-tab="${k}" aria-current="${S.tab===k?"page":"false"}">${l}${c?`<span class="badge">${c}</span>`:""}</button>`).join("")+`<button class="tab" data-act="logout" title="Se déconnecter">Quitter</button>`;
 }
@@ -201,10 +221,10 @@ function render(){
 function vTodo(){
   const T=tasks(), act=T.filter(t=>t.cls!=="t-soon"), soon=T.filter(t=>t.cls==="t-soon");
   const row=t=>`<div class="task ${t.cls}"><div class="when"><b>${t.when}</b>${t.date?fmt(t.date):""}</div><div class="what"><b>${t.l}</b><span>${esc(t.sub)}</span></div>
-    <div>${t.recu?`<button class="btn small" data-recu="${t.recu.id}">Traiter</button>`:t.k==="parrain"?`<button class="btn small" data-open="${t.d.id}">Désigner</button>`:`<button class="btn small" data-mail="${t.d.id}:${t.k}">Préparer le mail</button>`}</div></div>`;
+    <div>${t.recu?`<button class="btn small" data-recu="${t.recu.id}">Traiter</button>`:t.k==="parrain"?`<button class="btn small" data-open="${t.d.id}">Désigner</button>`:`<button class="btn small" data-mail="${t.d.id}:${t.k}"><span class="dot"></span>Préparer le mail</button>`}</div></div>`;
   return `<div class="head"><div><p class="eyebrow">Tableau de bord</p><h2>À faire</h2></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn ghost" data-act="fetch" ${S.fetching?"disabled":""}>${S.fetching?"Actualisation…":"Actualiser"}</button></div></div>
-    ${S.mailOk?`<div class="callout good" style="margin-bottom:12px"><span><b>Envoi automatique activé.</b> Dès que vous désignez un parrain, l'arrivant et le parrain reçoivent leur mail. Les questionnaires partent seuls à 1 mois et à 3 mois. Seuls les échecs d'envoi apparaissent ici.</span></div>`:`<div class="callout warn" style="margin-bottom:12px"><span><b>Envoi automatique pas encore activé.</b> En attendant, préparez les mails ci-dessous et envoyez-les depuis Outlook.</span></div>`}
+    ${S.mailOk?`<div class="callout good" style="margin-bottom:12px"><span><b>Envoi automatique activé.</b> Dès que vous désignez un parrain, l'arrivant et le parrain reçoivent leur mail. Les questionnaires partent seuls à 1 mois et à 3 mois. Seuls les échecs d'envoi apparaissent ici.</span></div>`:`<div class="callout info" style="margin-bottom:12px"><span><b>Vos mails sont prêts à envoyer depuis Outlook.</b> Un point rouge vous prévient dès qu'un mail est à envoyer : bienvenue et parrain dès la désignation, questionnaires à 1 mois, puis à 3 mois. Cliquez sur « Préparer le mail », collez-le dans Outlook, puis « Marquer comme envoyé ».</span></div>`}
     ${S.fetchMsg?`<div class="callout ${S.fetchMsg.startsWith("✓")?"good":"warn"}" style="margin-bottom:12px"><span>${S.fetchMsg}</span></div>`:""}
     ${!S.dossiers.length&&!S.recus.length?`<div class="empty"><b>Aucun arrivant pour l'instant.</b><span>Les accueils terminés sur le site arrivent ici automatiquement, ainsi que les réponses aux questionnaires.</span><button class="btn" data-tab="import">Basculer une attestation</button></div>`:
     act.length?`<div class="tasks">${act.map(row).join("")}</div>`:`<div class="callout good"><b>Rien à faire aujourd'hui.</b><span>Toutes les actions dues sont faites.</span></div>`}
@@ -296,7 +316,7 @@ function vMail(d,k){
   const P=S.mailPrev, st=STEPS.find(x=>x.k===k), s=(d.steps||{})[k]||{};
   const head=`<div class="sh"><div><span class="eyebrow">${esc(fullName(d))}</span><h3 id="mt">${st.l}</h3></div><button class="x" data-close aria-label="Fermer">✕</button></div>`;
   if(!P||P.err) return `<div class="sheet-bg" data-close><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mt">${head}<div class="sb"><p class="hint">${P?.err||"Chargement de l'aperçu…"}</p></div></div></div>`;
-  const href=`mailto:${encodeURIComponent(P.to||"")}?subject=${encodeURIComponent(P.subject)}&body=${encodeURIComponent(P.text)}`;
+  const href=`mailto:${encodeURIComponent(P.to||"")}?subject=${encodeURIComponent(P.subject)}`;
   const status = s.sentAt?`<div class="callout good"><span>${s.auto?"Envoyé automatiquement":"Envoyé"} le ${new Date(s.sentAt).toLocaleString("fr-FR")}.</span></div>` : s.error?`<div class="callout bad"><span><b>Échec d'envoi :</b> ${esc(s.error)}</span></div>` : st.d && S.mailOk?`<div class="callout info"><span>Envoi automatique prévu le ${fmt(addDays(d.date,st.d))}.</span></div>`:"";
   return `<div class="sheet-bg" data-close><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="mt">${head}
     <div class="sb mailbox">
@@ -304,11 +324,15 @@ function vMail(d,k){
       ${!P.to?`<div class="callout warn"><span>Aucune adresse mail pour ${st.to==="parrain"?"le parrain":"l'arrivant"}. Complétez le dossier.</span></div>`:""}
       <div class="lineb"><span class="lbl">À</span><span class="mono" style="user-select:all">${esc(P.to||"—")}</span></div>
       <div class="lineb"><span class="lbl">Objet</span><span style="user-select:all">${esc(P.subject)}</span></div>
-      <pre id="mailbody">${esc(P.text)}</pre>
+      ${S.mailOk?`<pre id="mailbody">${esc(P.text)}</pre>`:""}
       ${S.mailOk?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn good small" data-act="sendNow" ${P.to?"":"disabled"}>${s.sentAt?"Renvoyer maintenant":"Envoyer maintenant"}</button></div>`
-      :`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost small" data-copy="text">Copier le texte</button><a class="btn ghost small" href="${href}" target="_blank" rel="noopener">Ouvrir dans ma messagerie</a>
-        <button class="btn good small" data-act="markSent" style="margin-left:auto">${s.sentAt?`Envoyé le ${fmt(s.sentAt)} · remarquer`:"Marquer comme envoyé"}</button></div>
-      <span class="hint">L'envoi automatique n'est pas encore activé : copiez le texte dans Outlook, puis cliquez sur « Marquer comme envoyé ».</span>`}
+      :`<ol class="msteps">
+        <li><span>Copiez le mail mis en forme</span><button class="btn small" data-act="copyHtml">Copier le mail</button></li>
+        <li><span>Ouvrez un nouveau mail dans Outlook (destinataire et objet déjà remplis), puis collez avec <b>Ctrl+V</b></span><a class="btn ghost small" href="${href}">Ouvrir Outlook</a></li>
+        <li><span>Envoyez-le, puis revenez ici</span><button class="btn good small" data-act="markSent">${s.sentAt?`Envoyé le ${fmt(s.sentAt)} · remarquer`:"Marquer comme envoyé"}</button></li>
+      </ol>
+      <div class="mprev"><span class="lbl">Aperçu du mail</span><iframe id="mframe" title="Aperçu du mail" sandbox="allow-same-origin"></iframe></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost small" data-copy="to">Copier l'adresse</button><button class="btn ghost small" data-copy="subject">Copier l'objet</button><button class="btn ghost small" data-copy="text">Copier en texte simple</button></div>`}
     </div></div></div>`;
 }
 
@@ -381,13 +405,14 @@ document.addEventListener("click",async e=>{
   if(t.dataset.recu){ const r=S.recus.find(x=>x.id===t.dataset.recu); if(r) openRecu(r); return; }
   if(t.dataset.open){ S.open=t.dataset.open; $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===S.open)); return; }
   if(t.dataset.mail){ const [id,k]=t.dataset.mail.split(":"); openMail(id,k); return; }
-  if(t.dataset.copy){ const v=S.mailPrev?.text||""; try{ await navigator.clipboard.writeText(v); t.textContent="Copié"; }catch(_){ toast("Sélectionnez le texte et copiez-le avec Ctrl+C."); } return; }
+  if(t.dataset.copy){ const v=(S.mailPrev||{})[t.dataset.copy]||""; try{ await navigator.clipboard.writeText(v); t.textContent="Copié"; }catch(_){ toast("Sélectionnez le texte et copiez-le avec Ctrl+C."); } return; }
   if(t.dataset.dec){ S.decision=t.dataset.dec; t.parentElement.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b===t)); return; }
   if(t.dataset.delp!==undefined){ S.parrains.splice(+t.dataset.delp,1); render(); return; }
   const a=t.dataset.act; if(!a) return;
   if(a==="fetch") return fetchAnswers();
   if(a==="dlrecu"){ if(S.imp?.bytes) download(new Blob([S.imp.bytes],{type:"application/pdf"}),S.imp.name); return; }
   if(a==="logout"){ try{ sessionStorage.removeItem("sse_tok"); }catch(_){ } TOKEN=null; clearInterval(window.__poll); showLock(false); return; }
+  if(a==="copyHtml") return copyHtml(t);
   if(a==="sendNow"){ t.disabled=true; t.textContent="Envoi…"; try{ const r=await fetch("/api/mail/"+encodeURIComponent(S.mail.id)+"/"+S.mail.k,{method:"POST",headers:{authorization:"Bearer "+TOKEN}}); const j=await r.json(); if(j.dossier){ const i=S.dossiers.findIndex(x=>x.id===j.dossier.id); if(i>=0) S.dossiers[i]=j.dossier; } toast(r.ok?"Mail envoyé.":"Échec : "+(j.error||r.status)); }catch(_){ toast("Envoi impossible."); } $("#sheet").innerHTML=""; S.mail=null; render(); return; }
   if(a==="markSent"){ const d=JSON.parse(JSON.stringify(S.dossiers.find(x=>x.id===S.mail.id))); d.steps[S.mail.k]={...(d.steps[S.mail.k]||{}), sentAt:new Date().toISOString()}; await saveDossier(d); $("#sheet").innerHTML=""; S.mail=null; toast("Marqué comme envoyé."); return; }
   if(a==="saveD"){ const d=JSON.parse(JSON.stringify(S.dossiers.find(x=>x.id===S.open))); document.querySelectorAll("[data-ed]").forEach(i=>d[i.dataset.ed]=i.value); d.posteLabel=POSTES[d.poste]||d.posteLabel; const p={}; document.querySelectorAll("[data-edparr]").forEach(i=>p[i.dataset.edparr]=i.value.trim()); d.parrain=p.nom?p:null; await saveDossier(d); toast("Dossier enregistré."); $("#sheet").innerHTML=""; S.open=null; return; }

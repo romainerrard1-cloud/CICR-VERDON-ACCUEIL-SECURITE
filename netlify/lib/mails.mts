@@ -105,16 +105,21 @@ export function mailFor(d: any, k: string, settings: any): Mail | null {
 export function renderText(m: Mail) {
   return m.blocks.map((b) => typeof b === "string" ? b : "list" in b ? b.list.map((x) => "- " + x).join("\n") : `${b.button[0]} :\n${b.button[1]}`).join("\n\n");
 }
-export function renderHtml(m: Mail) {
+/* Mise en forme compatible Outlook (tableaux, styles en ligne, pas de dégradé). */
+export function renderHtml(m: Mail, site = "") {
+  const F = "font-family:Arial,Helvetica,sans-serif;";
+  const band = ["#e4003a", "#f07d00", "#f2c200", "#3aaa35", "#0071b9", "#6c2c8c"].map((c) => `<td bgcolor="${c}" style="background:${c};height:6px;line-height:6px;font-size:0">&nbsp;</td>`).join("");
   const body = m.blocks.map((b) => {
-    if (typeof b === "string") return `<p style="margin:0 0 14px">${esc(b).replace(/\n/g, "<br>")}</p>`;
-    if ("list" in b) return `<ul style="margin:0 0 14px;padding-left:20px">${b.list.map((x) => `<li style="margin:0 0 4px">${esc(x)}</li>`).join("")}</ul>`;
-    return `<p style="margin:6px 0 18px"><a href="${esc(b.button[1])}" style="display:inline-block;background:#2c3c9c;color:#fff;text-decoration:none;font-weight:600;padding:12px 20px;border-radius:8px">${esc(b.button[0])}</a></p>`;
+    if (typeof b === "string") return `<p style="${F}margin:0 0 14px;font-size:15px;line-height:22px;color:#1b2127">${esc(b).replace(/\n/g, "<br>")}</p>`;
+    if ("list" in b) return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 14px">${b.list.map((x) => `<tr><td valign="top" style="${F}color:#c8102e;font-size:15px;line-height:22px;padding:0 8px 4px 0">&#9632;</td><td style="${F}font-size:15px;line-height:22px;color:#1b2127;padding:0 0 4px">${esc(x)}</td></tr>`).join("")}</table>`;
+    return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 18px"><tr><td bgcolor="#2c3c9c" style="background:#2c3c9c;border-radius:6px;padding:12px 22px"><a href="${esc(b.button[1])}" style="${F}color:#ffffff;text-decoration:none;font-weight:bold;font-size:15px">${esc(b.button[0])} &rarr;</a></td></tr></table><p style="${F}margin:0 0 14px;font-size:12px;color:#56626d">Si le bouton ne fonctionne pas : <a href="${esc(b.button[1])}" style="color:#2c3c9c">${esc(b.button[1])}</a></p>`;
   }).join("");
-  return `<!doctype html><html><body style="margin:0;background:#eceff2;font-family:Arial,Helvetica,sans-serif;color:#1b2127;font-size:15px;line-height:1.5">
-<div style="max-width:600px;margin:0 auto;padding:20px 12px"><div style="background:#fff;border-radius:12px;overflow:hidden">
-<div style="height:6px;background:linear-gradient(90deg,#e4003a,#f07d00,#f2c200,#3aaa35,#0071b9,#6c2c8c)"></div>
-<div style="padding:22px 24px"><p style="margin:0 0 16px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#56626d;font-size:12px">CICR Verdon · accueil et suivi des arrivants</p>${body}</div></div></div></body></html>`;
+  const logo = site ? `<img src="${esc(site)}/img/logo.png" width="110" alt="Verdon" style="display:block;border:0;width:110px;height:auto">` : `<b style="${F}font-size:18px;color:#1b2127">VERDON</b>`;
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:620px;border:1px solid #d3d9df;border-collapse:collapse">
+<tr><td style="padding:0"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0"><tr>${band}</tr></table></td></tr>
+<tr><td style="padding:18px 24px 6px">${logo}<p style="${F}margin:10px 0 0;font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#56626d;font-weight:bold">CICR Verdon &middot; accueil et suivi des arrivants</p></td></tr>
+<tr><td style="padding:14px 24px 10px">${body}</td></tr>
+</table>`;
 }
 
 export async function sendMail(m: Mail) {
@@ -124,7 +129,7 @@ export async function sendMail(m: Mail) {
   const r = await fetch("https://api.brevo.com/v3/smtp/email", {
     method: "POST",
     headers: { "api-key": key, "content-type": "application/json", accept: "application/json" },
-    body: JSON.stringify({ sender: sender(), replyTo: { email: SSE_MAIL, name: "Romain Errard" }, to: [{ email: m.to, name: m.toName || m.to }], subject: m.subject, htmlContent: renderHtml(m), textContent: renderText(m) }),
+    body: JSON.stringify({ sender: sender(), replyTo: { email: SSE_MAIL, name: "Romain Errard" }, to: [{ email: m.to, name: m.toName || m.to }], subject: m.subject, htmlContent: renderHtml(m, Netlify.env.get("URL") || ""), textContent: renderText(m) }),
   });
   if (!r.ok) throw new Error(`Brevo ${r.status} : ${(await r.text()).slice(0, 200)}`);
 }
