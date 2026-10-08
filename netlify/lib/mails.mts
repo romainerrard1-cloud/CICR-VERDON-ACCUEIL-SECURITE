@@ -31,7 +31,7 @@ const esc = (s: unknown) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&
 function qLink(d: any, k: string, settings: any) {
   const s = d.steps?.[k] || {};
   const p = new URLSearchParams({ f: k, t: s.token || "", a: k === "p1m" ? fullName(d) : d.prenom || "" });
-  if (k === "q1m" && d.parrain?.nom) p.set("p", d.parrain.nom);
+  if ((k === "q1m" || k === "p1m") && d.parrain?.nom) p.set("p", d.parrain.nom);
   return `${siteUrl(settings)}/q.html?${p}`;
 }
 

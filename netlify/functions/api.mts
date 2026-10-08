@@ -6,7 +6,7 @@ import { mailFor, renderText, renderHtml, siteUrl, sendMail, processDossier, mai
    Public : POST /api/accueil (fin d'accueil), POST /api/q (questionnaires), POST /api/login.
    Privé (jeton) : état, dossiers, accueils reçus, parrains, réglages. */
 
-const ANSWER_KEYS = ["accueil","consignes","parrain","epi","securite","danger","danger_detail","commentaire","c_securite","c_risques","c_epi","c_gestes","c_autonomie","c_qualite","c_equipe","c_vigilance","fin_parrainage","experience","recommande"];
+const ANSWER_KEYS = ["accueil","consignes","parrain","epi","securite","danger","danger_detail","commentaire","c_securite","c_risques","c_epi","c_gestes","c_autonomie","c_qualite","c_ponctualite","c_hierarchie","c_equipe","c_vigilance","fin_parrainage","experience","recommande","signataire"];
 const FORMS = ["q1m","p1m","q3m"];
 const enc = new TextEncoder();
 
@@ -90,6 +90,9 @@ export default async (req: Request, _context: Context) => {
       const now = new Date().toISOString();
       d.steps = d.steps || {};
       d.steps[form] = { ...(d.steps[form] || {}), doneAt: now, answers };
+      const sig = String(body.signature || "");
+      if (sig && /^data:image\/png;base64,[A-Za-z0-9+/=]+$/.test(sig) && sig.length < 400000) d.steps[form].signature = sig;
+      if (form === "p1m" && !d.steps[form].signature) return json({ error: "signature" }, 400);
       if (form === "p1m" && /^Oui/.test(answers.fin_parrainage || "")) d.finParrainage = now;
       await st.setJSON("dossiers/" + d.id, d);
       return json({ ok: true });

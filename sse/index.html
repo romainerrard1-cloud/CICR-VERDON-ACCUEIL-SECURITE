@@ -87,6 +87,9 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--surface-2)}
 .toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:#1b2127;color:#fff;padding:10px 16px;border-radius:10px;z-index:60;font-size:.9rem}
 .mono{font-family:var(--fm);font-size:.8rem}
 @media (max-width:760px){.grid2{grid-template-columns:1fr}.task{grid-template-columns:1fr}.prow{grid-template-columns:1fr}}
+.crits{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.pcrit{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:.86rem;padding:4px 0 8px}.pcrit label{display:flex;gap:5px;align-items:center}.pcrit input{width:auto}
+details.alt summary{cursor:pointer;color:var(--muted);font-size:.88rem}
 .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:#e4003a;margin-right:6px;vertical-align:middle}
 .msteps{margin:0;padding:0;list-style:none;display:grid;gap:8px;counter-reset:ms}
 .msteps li{counter-increment:ms;display:grid;grid-template-columns:28px 1fr auto;gap:10px;align-items:center;background:var(--surface-2);border:1px solid var(--line);border-radius:10px;padding:10px 12px}
@@ -113,8 +116,11 @@ const STEPS = [
   {k:"p1m", l:"Évaluation par le parrain à 1 mois", d:30, to:"parrain", form:true},
   {k:"q3m", l:"Expérience à 3 mois (étoiles + avis Google)", d:90, to:"arrivant", form:true}
 ];
-const LABELS = {accueil:"Accueil sécurité",consignes:"Consignes claires",parrain:"Accompagnement du parrain",epi:"EPI dès le 1er jour",securite:"Se sent en sécurité",danger:"Situation dangereuse non traitée",danger_detail:"Détail",commentaire:"Commentaire",c_securite:"Respect des consignes SSE",c_risques:"Maîtrise des 3 risques majeurs",c_epi:"Port des EPI",c_gestes:"Gestes du métier",c_autonomie:"Autonomie",c_qualite:"Qualité du travail",c_equipe:"Intégration dans l'équipe",c_vigilance:"Vigilance et remontées",fin_parrainage:"Fin de parrainage",experience:"Expérience chez Verdon",recommande:"Recommanderait CICR Verdon"};
-const STAR_KEYS = ["accueil","consignes","parrain","securite","experience","c_securite","c_risques","c_epi","c_gestes","c_autonomie","c_qualite","c_equipe","c_vigilance"];
+const LABELS = {accueil:"Accueil sécurité",consignes:"Consignes claires",parrain:"Accompagnement du parrain",epi:"EPI dès le 1er jour",securite:"Se sent en sécurité",danger:"Situation dangereuse non traitée",danger_detail:"Détail",commentaire:"Commentaire",c_securite:"Respect des consignes SSE",c_risques:"Maîtrise des 3 risques majeurs",c_epi:"Port des EPI",c_gestes:"Gestes du métier",c_autonomie:"Autonomie",c_qualite:"Qualité du travail",c_ponctualite:"Ponctualité, disponibilité, présentation",c_hierarchie:"Rapport avec la hiérarchie",signataire:"Signé par",c_equipe:"Intégration dans l'équipe",c_vigilance:"Vigilance et remontées",fin_parrainage:"Fin de parrainage",experience:"Expérience chez Verdon",recommande:"Recommanderait CICR Verdon"};
+const CRIT = [["crit_entreprise","Connaissance de l'entreprise"],["crit_technique","Compétences techniques"],["crit_sse","Sensibilité SSE, adhère à nos exigences"],["crit_pedago","Aptitudes pédagogiques"]];
+const critOf = p => { const o={}; CRIT.forEach(([k])=>{ if(p&&p[k]) o[k]=true; }); return o; };
+const critHtml = p => `<div class="crits">${CRIT.map(([k,l])=>`<span class="chip ${p&&p[k]?"ok":"late"}">${p&&p[k]?"✓":"✗"} ${l}</span>`).join("")}</div>`;
+const STAR_KEYS = ["accueil","consignes","parrain","securite","experience","c_securite","c_risques","c_epi","c_gestes","c_autonomie","c_qualite","c_ponctualite","c_hierarchie","c_equipe","c_vigilance"];
 
 /* ===================== État ===================== */
 const S = {tab:"todo", recus:[], dossiers:[], parrains:[], settings:{...DEFAULT_SETTINGS}, ready:false, dbOk:true, open:null, mail:null, imp:null, sig:null, decision:"Validé", comment:"", fetchMsg:"", fetching:false, delSubs:true, mailOk:false, mailPrev:null};
@@ -158,6 +164,42 @@ function tasks(){
 
 /* ===================== Mails (rédigés et envoyés par le site) ===================== */
 function fillFrame(){ const f=$("#mframe"); if(!f||!S.mailPrev?.html) return; f.srcdoc=`<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0;padding:12px;background:#fff}</style></head><body>${S.mailPrev.html}</body></html>`; f.onload=()=>{ try{ f.style.height=(f.contentDocument.body.scrollHeight+30)+"px"; }catch(_){ } }; }
+const b64u = str => { const b=new TextEncoder().encode(str); let s=""; for(let i=0;i<b.length;i+=0x8000) s+=String.fromCharCode(...b.subarray(i,i+0x8000)); return btoa(s); };
+function emlOf(P){
+  const wrap=s=>s.replace(/.{1,76}/g,"$&\r\n");
+  const html=`<!doctype html><html><head><meta charset="utf-8"></head><body style="margin:0;padding:12px">${P.html}</body></html>`;
+  return ["X-Unsent: 1",`To: ${P.to||""}`,`Subject: =?UTF-8?B?${b64u(P.subject)}?=`,"MIME-Version: 1.0",'Content-Type: multipart/alternative; boundary="cicr-b"',"","--cicr-b","Content-Type: text/plain; charset=UTF-8","Content-Transfer-Encoding: base64","",wrap(b64u(P.text)),"--cicr-b","Content-Type: text/html; charset=UTF-8","Content-Transfer-Encoding: base64","",wrap(b64u(html)),"--cicr-b--",""].join("\r\n");
+}
+async function fichePdf(d){
+  const {PDFDocument,StandardFonts,rgb}=PDFLib; const pdf=await PDFDocument.create();
+  const f=await pdf.embedFont(StandardFonts.Helvetica), fb=await pdf.embedFont(StandardFonts.HelveticaBold), T=pdfTxt;
+  const mm=v=>v*2.8346, ink=rgb(.1,.12,.15), grey=rgb(.35,.38,.42), red=rgb(.78,.06,.18), green=rgb(.06,.48,.24);
+  let pg, y; const W=595.28, H=841.89;
+  const newPage=()=>{ pg=pdf.addPage([W,H]); y=H-mm(16); ["#e4003a","#f07d00","#f2c200","#3aaa35","#0071b9","#6c2c8c"].forEach((c,i)=>{ const n=parseInt(c.slice(1),16); pg.drawRectangle({x:i*W/6,y:H-6,width:W/6,height:6,color:rgb((n>>16)/255,((n>>8)&255)/255,(n&255)/255)}); }); };
+  const need=h=>{ if(y-h<mm(18)) newPage(); };
+  const wrapT=(t,size,font,maxW)=>{ const out=[]; let cur=""; T(t).split(" ").forEach(w=>{ const n=cur?cur+" "+w:w; if(font.widthOfTextAtSize(n,size)>maxW){ if(cur) out.push(cur); cur=w; } else cur=n; }); if(cur) out.push(cur); return out.length?out:[""]; };
+  const h1=t=>{ need(mm(14)); pg.drawText(T(t),{x:mm(16),y,size:16,font:fb,color:ink}); y-=mm(8); };
+  const sec=t=>{ need(mm(14)); y-=mm(3); pg.drawRectangle({x:mm(16),y:y-mm(1.5),width:W-mm(32),height:mm(7),color:rgb(.93,.94,.96)}); pg.drawText(T(t.toUpperCase()),{x:mm(18),y:y+mm(.4),size:9,font:fb,color:ink}); y-=mm(9); };
+  const kv=(k,v,col)=>{ const L=wrapT(String(v??"-"),9.5,f,W-mm(94)), K=wrapT(k,9,f,mm(56)), n=Math.max(L.length,K.length); need(n*12+4); K.forEach((l,i)=>pg.drawText(l,{x:mm(18),y:y-i*12,size:9,font:f,color:grey})); L.forEach((l,i)=>pg.drawText(l,{x:mm(78),y:y-i*12,size:9.5,font:f,color:col||ink})); y-=n*12+5; };
+  const stars=v=>v?(v+" / 5"):"-";
+  newPage();
+  pg.drawText(T("CICR VERDON · FICHE DE SUIVI D'INTÉGRATION"),{x:mm(16),y,size:8.5,font:fb,color:grey}); y-=mm(7);
+  h1(fullName(d)); pg.drawText(T(`${d.posteLabel||""} · ${d.statut||""}${d.agence?" · agence "+d.agence:""}`),{x:mm(16),y,size:10,font:f,color:grey}); y-=mm(6);
+  sec("1. Arrivant (MASE 2.1)"); kv("Mail personnel",d.emailPerso); kv("Date d'arrivée",fmt(d.date?d.date+"T12:00:00":"")); kv("Lieu",[...(d.lieux||[]),d.chantier].filter(Boolean).join(", ")||"-");
+  sec("2. Accueil sécurité santé environnement (MASE 2.2.2)"); kv("Validé le",fmt(d.validatedAt)+" · "+(d.validated||"Validé")+" par "+(S.settings.signataire||"")+", "+(S.settings.fonction||"")); kv("Contrôle des connaissances",(d.quiz??"-")+"/15 (minimum 10/15)"+(d.tentatives?" · "+d.tentatives+" tentative(s)":""));
+  kv("Accueil renforcé",(d.rq??"-")+"/10 aux questions sur les 3 risques majeurs · partie pratique sur le terrain avec le chef d'équipe"); kv("Risques majeurs du poste",(d.risques||[]).join(", ")||"-");
+  sec("3. Parrain tuteur (MASE 2.2.1)"); kv("Parrain désigné",d.parrain?.nom?d.parrain.nom+(d.parrain.email?" · "+d.parrain.email:""):"Non désigné", d.parrain?.nom?null:red); if(d.parrain?.pourquoi) kv("Pourquoi ce parrain",d.parrain.pourquoi);
+  CRIT.forEach(([k,l])=>kv(l, d.parrain?.[k]?"Oui":"Non renseigné", d.parrain?.[k]?green:red));
+  sec("4. Suivi et communication"); STEPS.forEach(st=>{ const s=(d.steps||{})[st.k]||{}; kv(st.l, s.doneAt?"Répondu le "+fmt(s.doneAt)+(s.sentAt?" (envoyé le "+fmt(s.sentAt)+")":""):s.sentAt?"Envoyé le "+fmt(s.sentAt)+(st.form?", en attente de réponse":""):"Non envoyé", s.doneAt||(!st.form&&s.sentAt)?green:null); });
+  const block=(k,title)=>{ const s=(d.steps||{})[k]||{}, a=s.answers; sec(title); if(!a){ kv("Statut","Pas encore de réponse"); return; } Object.entries(a).filter(([x,v])=>LABELS[x]&&v!=="").forEach(([x,v])=>kv(LABELS[x], STAR_KEYS.includes(x)?stars(v):v)); kv("Date",fmt(s.doneAt)); return s; };
+  const p1=block("p1m","5. Évaluation par le parrain à 1 mois (MASE 2.2.1.9 · 2.3)");
+  if(p1&&p1.signature){ need(mm(34)); pg.drawText("Signature du parrain",{x:mm(18),y,size:9,font:f,color:grey}); const im=await pdf.embedPng(p1.signature); const w=mm(60), h=w*im.height/im.width; pg.drawRectangle({x:mm(78),y:y-h+mm(3),width:w,height:h,borderColor:rgb(.8,.82,.85),borderWidth:.8}); pg.drawImage(im,{x:mm(78),y:y-h+mm(3),width:w,height:h}); y-=h+mm(4); }
+  kv("Fin de parrainage", d.finParrainage?"Actée le "+fmt(d.finParrainage):"Non actée", d.finParrainage?green:red);
+  block("q1m","6. Retour de l'arrivant à 1 mois"); block("q3m","7. Expérience à 3 mois");
+  if(d.notes){ sec("Notes du service SSE"); kv("Notes",d.notes); }
+  need(mm(10)); y-=mm(4); pg.drawText(T(`Fiche générée le ${new Date().toLocaleString("fr-FR")} depuis l'espace SSE CICR Verdon.`),{x:mm(16),y,size:8,font:f,color:grey});
+  const out=await pdf.save(); download(new Blob([out],{type:"application/pdf"}),`Fiche_suivi_${d.nom}_${d.prenom}.pdf`); toast("Fiche de suivi téléchargée.");
+}
 async function copyHtml(btn){
   const P=S.mailPrev; if(!P) return;
   try{ await navigator.clipboard.write([new ClipboardItem({"text/html":new Blob([P.html],{type:"text/html"}),"text/plain":new Blob([P.text],{type:"text/plain"})})]); btn.textContent="Copié ✓"; toast("Mail copié : collez-le dans Outlook avec Ctrl+V."); return; }catch(_){ }
@@ -274,10 +316,11 @@ function vImport(){
 }
 function vParrains(){
   return `<div class="head"><div><p class="eyebrow">${S.parrains.length} parrain${S.parrains.length>1?"s":""}</p><h2>Parrains tuteurs</h2></div><div style="display:flex;gap:8px"><button class="btn ghost" data-act="addP">Ajouter un parrain</button><button class="btn" data-act="saveP">Enregistrer</button></div></div>
-  <div class="callout info" style="margin-bottom:12px"><span>Le premier parrain trouvé pour le poste de l'arrivant est proposé automatiquement. Choisissez « Tous postes » pour un parrain par défaut.</span></div>
+  <div class="callout info" style="margin-bottom:12px"><span>Le premier parrain trouvé pour le poste de l'arrivant est proposé automatiquement. Choisissez « Tous postes » pour un parrain par défaut. Cochez les 4 critères de désignation : ils sont exigés par le MASE et repris dans la fiche de suivi.</span></div>
   <div class="panel">${S.parrains.length?`<div class="prow" style="font-weight:600;font-size:.8rem;color:var(--muted)"><span>Poste</span><span>Nom</span><span>Mail</span><span>Pourquoi ce parrain (compétences, expérience)</span><span></span></div>`:""}
   ${S.parrains.map((p,i)=>`<div class="prow"><select data-p="${i}:poste"><option value="tous" ${p.poste==="tous"?"selected":""}>Tous postes</option>${Object.entries(POSTES).map(([k,l])=>`<option value="${k}" ${p.poste===k?"selected":""}>${l}</option>`).join("")}</select>
-    <input data-p="${i}:nom" value="${esc(p.nom)}" placeholder="Prénom Nom"><input data-p="${i}:email" value="${esc(p.email)}" placeholder="mail@groupe-verdon.com"><textarea data-p="${i}:pourquoi" placeholder="Ex. : 15 ans de tuyauterie inox, SST, exigeant sur la sécurité">${esc(p.pourquoi||"")}</textarea><button class="btn ghost small" data-delp="${i}">Retirer</button></div>`).join("") || `<div class="empty"><b>Aucun parrain enregistré.</b><span>Ajoutez vos parrains tuteurs et leur poste.</span></div>`}</div>`;
+    <input data-p="${i}:nom" value="${esc(p.nom)}" placeholder="Prénom Nom"><input data-p="${i}:email" value="${esc(p.email)}" placeholder="mail@groupe-verdon.com"><textarea data-p="${i}:pourquoi" placeholder="Ex. : 15 ans de tuyauterie inox, SST, exigeant sur la sécurité">${esc(p.pourquoi||"")}</textarea><button class="btn ghost small" data-delp="${i}">Retirer</button>
+    <div class="pcrit"><span class="hint">Critères de désignation (MASE 2.2.1) :</span>${CRIT.map(([k,l])=>`<label><input type="checkbox" data-p="${i}:${k}" ${p[k]?"checked":""}> ${l}</label>`).join("")}</div></div>`).join("") || `<div class="empty"><b>Aucun parrain enregistré.</b><span>Ajoutez vos parrains tuteurs et leur poste.</span></div>`}</div>`;
 }
 function vReglages(){
   const st=S.settings;
@@ -292,7 +335,7 @@ function vReglages(){
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="purgeM" style="width:auto">${[6,12,24,36,60].map(m=>`<option value="${m}" ${m===12?"selected":""}>${m} mois</option>`).join("")}</select><button class="btn danger small" data-act="purge">Supprimer ces dossiers</button></div></div>`;
 }
 function vDetail(d){
-  const ans=(k)=>{ const a=(d.steps||{})[k]?.answers; if(!a) return ""; return `<div class="answers">${Object.entries(a).filter(([x,v])=>LABELS[x]&&v!=="").map(([x,v])=>`<div><span>${LABELS[x]}</span><b>${STAR_KEYS.includes(x)?`<span class="stars">${"★".repeat(+v)}${"☆".repeat(5-+v)}</span>`:esc(v)}</b></div>`).join("")}</div>`; };
+  const ans=(k)=>{ const a=(d.steps||{})[k]?.answers, sg=(d.steps||{})[k]?.signature; if(!a) return ""; return `<div class="answers">${Object.entries(a).filter(([x,v])=>LABELS[x]&&v!=="").map(([x,v])=>`<div><span>${LABELS[x]}</span><b>${STAR_KEYS.includes(x)?`<span class="stars">${"★".repeat(+v)}${"☆".repeat(5-+v)}</span>`:esc(v)}</b></div>`).join("")}${sg?`<div><span>Signature</span><b><img src="${sg}" alt="Signature du parrain" style="max-width:220px;height:auto;background:#fff;border:1px solid var(--line);border-radius:6px"></b></div>`:""}</div>`; };
   return `<div class="sheet-bg" data-close><div class="sheet" role="dialog" aria-modal="true" aria-labelledby="dt">
     <div class="sh"><div><span class="eyebrow">Dossier arrivant</span><h3 id="dt">${esc(fullName(d))}</h3></div><button class="x" data-close aria-label="Fermer">✕</button></div>
     <div class="sb">
@@ -302,9 +345,9 @@ function vDetail(d){
       ${(d.risques||[]).length?`<p class="hint" style="margin:0">Risques majeurs du poste : <b>${esc(d.risques.join(", "))}</b></p>`:""}
       <div><p class="lbl" style="margin-bottom:6px">Parrain tuteur</p><div class="grid2"><div class="field full"><select data-edp>${parrainOptions(d.parrain?.nom)}</select></div>
         <div class="field"><label>Nom</label><input data-edparr="nom" value="${esc(d.parrain?.nom||"")}"></div><div class="field"><label>Mail</label><input data-edparr="email" value="${esc(d.parrain?.email||"")}"></div>
-        <div class="field full"><label>Pourquoi ce parrain</label><input data-edparr="pourquoi" value="${esc(d.parrain?.pourquoi||"")}"></div></div></div>
+        <div class="field full"><label>Pourquoi ce parrain</label><input data-edparr="pourquoi" value="${esc(d.parrain?.pourquoi||"")}"></div></div>${d.parrain?.nom?critHtml(d.parrain):""}</div>
       <div class="field"><label>Notes</label><textarea data-ed="notes">${esc(d.notes||"")}</textarea></div>
-      <div><button class="btn" data-act="saveD">Enregistrer les modifications</button></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="saveD">Enregistrer les modifications</button><button class="btn ghost" data-act="fiche">Télécharger la fiche de suivi (PDF)</button></div>
       <div><p class="lbl" style="margin-bottom:6px">Suivi</p><div class="timeline">${STEPS.map(st=>{ const r=stepState(d,st), s=r.s||{}; const c=r.state==="ok"?"ok":r.state==="late"?"late":["now","soon","wait"].includes(r.state)?"due":"";
         return `<div><div class="tl ${c}"><i></i><span><b>${st.l}</b><br><span class="hint">${s.error&&!s.sentAt?`<span style="color:var(--bad)">Échec d'envoi : ${esc(s.error)}</span>`:r.state==="ok"?(st.form?`Répondu le ${fmt(s.doneAt)}`:`${s.auto?"Envoyé automatiquement":"Envoyé"} le ${fmt(s.sentAt)}`):r.state==="wait"?`Envoyé le ${fmt(s.sentAt)}, en attente de réponse`:r.state==="blocked"?"Désignez d'abord le parrain":`${S.mailOk?"Envoi automatique le":"Prévu le"} ${fmt(r.due)}`}</span></span>
           <span>${r.state==="blocked"?"":`<button class="btn ghost small" data-mail="${d.id}:${st.k}">${r.state==="ok"&&!st.form?"Revoir":"Mail"}</button>`}</span></div>${st.form?ans(st.k):""}</div>`; }).join("")}</div></div>
@@ -327,10 +370,11 @@ function vMail(d,k){
       ${S.mailOk?`<pre id="mailbody">${esc(P.text)}</pre>`:""}
       ${S.mailOk?`<div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn good small" data-act="sendNow" ${P.to?"":"disabled"}>${s.sentAt?"Renvoyer maintenant":"Envoyer maintenant"}</button></div>`
       :`<ol class="msteps">
-        <li><span>Copiez le mail mis en forme</span><button class="btn small" data-act="copyHtml">Copier le mail</button></li>
-        <li><span>Ouvrez un nouveau mail dans Outlook (destinataire et objet déjà remplis), puis collez avec <b>Ctrl+V</b></span><a class="btn ghost small" href="${href}">Ouvrir Outlook</a></li>
-        <li><span>Envoyez-le, puis revenez ici</span><button class="btn good small" data-act="markSent">${s.sentAt?`Envoyé le ${fmt(s.sentAt)} · remarquer`:"Marquer comme envoyé"}</button></li>
+        <li><span>Ouvrez le mail dans Outlook : il s'ouvre <b>déjà rédigé</b>, avec le destinataire, l'objet et la mise en forme. Ouvrez le fichier téléchargé s'il ne s'ouvre pas tout seul.</span><button class="btn small" data-act="eml">Ouvrir dans Outlook</button></li>
+        <li><span>Relisez et cliquez sur <b>Envoyer</b> dans Outlook</span><span></span></li>
+        <li><span>Revenez ici pour le noter</span><button class="btn good small" data-act="markSent">${s.sentAt?`Envoyé le ${fmt(s.sentAt)} · remarquer`:"Marquer comme envoyé"}</button></li>
       </ol>
+      <details class="alt"><summary>Outlook sur le web ou autre messagerie</summary><div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px"><button class="btn ghost small" data-act="copyHtml">1. Copier le mail mis en forme</button><a class="btn ghost small" href="${href}">2. Nouveau mail, puis Ctrl+V</a></div></details>
       <div class="mprev"><span class="lbl">Aperçu du mail</span><iframe id="mframe" title="Aperçu du mail" sandbox="allow-same-origin"></iframe></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost small" data-copy="to">Copier l'adresse</button><button class="btn ghost small" data-copy="subject">Copier l'objet</button><button class="btn ghost small" data-copy="text">Copier en texte simple</button></div>`}
     </div></div></div>`;
@@ -382,7 +426,7 @@ async function createDossier(){
   if(!d.prenom||!d.nom){ toast("Renseignez au moins le prénom et le nom."); return false; }
   const id=(d.nom+"-"+d.prenom+"-"+(d.date||"")).toLowerCase().normalize("NFD").replace(/[^\w-]+/g,"").slice(0,60)+"-"+tok().slice(0,6);
   const dos={id, nom:d.nom, prenom:d.prenom, emailPerso:d.emailPerso||"", statut:d.statut||"", agence:d.agence||"", poste:d.poste||"autre", posteLabel:d.posteLabel||POSTES[d.poste]||"", date:d.date||new Date().toISOString().slice(0,10), lieux:d.lieux||[], quiz:d.quiz??null, tentatives:d.tentatives??null, renforcee:!!d.renforcee,
-    parrain:I.parrain?.nom?{nom:I.parrain.nom,email:I.parrain.email||"",pourquoi:I.parrain.pourquoi||""}:null, recuId:I.fromRecu||null, risques:d.risques||[], rq:d.rq??null, chantier:d.chantier||"", validated:S.decision, validatedAt:new Date().toISOString(), createdAt:new Date().toISOString(), notes:"",
+    parrain:I.parrain?.nom?{nom:I.parrain.nom,email:I.parrain.email||"",pourquoi:I.parrain.pourquoi||"",...critOf(S.parrains.find(x=>x.nom===I.parrain.nom)||I.parrain)}:null, recuId:I.fromRecu||null, risques:d.risques||[], rq:d.rq??null, chantier:d.chantier||"", validated:S.decision, validatedAt:new Date().toISOString(), createdAt:new Date().toISOString(), notes:"",
     steps:{mailArrivant:{},mailParrain:{},q1m:{token:tok()},p1m:{token:tok()},q3m:{token:tok()}}};
   try{ await saveDossier(dos);
     if(I.fromRecu){ try{ await deleteRecu(I.fromRecu,false); }catch(_){} }
@@ -413,14 +457,16 @@ document.addEventListener("click",async e=>{
   if(a==="dlrecu"){ if(S.imp?.bytes) download(new Blob([S.imp.bytes],{type:"application/pdf"}),S.imp.name); return; }
   if(a==="logout"){ try{ sessionStorage.removeItem("sse_tok"); }catch(_){ } TOKEN=null; clearInterval(window.__poll); showLock(false); return; }
   if(a==="copyHtml") return copyHtml(t);
+  if(a==="eml"){ const P=S.mailPrev, d=S.dossiers.find(x=>x.id===S.mail.id); if(!P) return; download(new Blob([emlOf(P)],{type:"message/rfc822"}), `Mail_${(STEPS.find(x=>x.k===S.mail.k)||{}).k}_${d.nom}_${d.prenom}.eml`); toast("Ouvrez le fichier téléchargé : le mail s'ouvre dans Outlook, prêt à envoyer."); return; }
+  if(a==="fiche"){ try{ await fichePdf(S.dossiers.find(x=>x.id===S.open)); }catch(e){ console.error(e); toast("La fiche n'a pas pu être générée."); } return; }
   if(a==="sendNow"){ t.disabled=true; t.textContent="Envoi…"; try{ const r=await fetch("/api/mail/"+encodeURIComponent(S.mail.id)+"/"+S.mail.k,{method:"POST",headers:{authorization:"Bearer "+TOKEN}}); const j=await r.json(); if(j.dossier){ const i=S.dossiers.findIndex(x=>x.id===j.dossier.id); if(i>=0) S.dossiers[i]=j.dossier; } toast(r.ok?"Mail envoyé.":"Échec : "+(j.error||r.status)); }catch(_){ toast("Envoi impossible."); } $("#sheet").innerHTML=""; S.mail=null; render(); return; }
   if(a==="markSent"){ const d=JSON.parse(JSON.stringify(S.dossiers.find(x=>x.id===S.mail.id))); d.steps[S.mail.k]={...(d.steps[S.mail.k]||{}), sentAt:new Date().toISOString()}; await saveDossier(d); $("#sheet").innerHTML=""; S.mail=null; toast("Marqué comme envoyé."); return; }
-  if(a==="saveD"){ const d=JSON.parse(JSON.stringify(S.dossiers.find(x=>x.id===S.open))); document.querySelectorAll("[data-ed]").forEach(i=>d[i.dataset.ed]=i.value); d.posteLabel=POSTES[d.poste]||d.posteLabel; const p={}; document.querySelectorAll("[data-edparr]").forEach(i=>p[i.dataset.edparr]=i.value.trim()); d.parrain=p.nom?p:null; await saveDossier(d); toast("Dossier enregistré."); $("#sheet").innerHTML=""; S.open=null; return; }
+  if(a==="saveD"){ const d=JSON.parse(JSON.stringify(S.dossiers.find(x=>x.id===S.open))); document.querySelectorAll("[data-ed]").forEach(i=>d[i.dataset.ed]=i.value); d.posteLabel=POSTES[d.poste]||d.posteLabel; const p={}; document.querySelectorAll("[data-edparr]").forEach(i=>p[i.dataset.edparr]=i.value.trim()); d.parrain=p.nom?{...p,...critOf(S.parrains.find(x=>x.nom===p.nom)||(d.parrain&&d.parrain.nom===p.nom?d.parrain:null))}:null; await saveDossier(d); toast("Dossier enregistré."); $("#sheet").innerHTML=""; S.open=null; return; }
   if(a==="askDel"){ S.confirmDel=S.open; $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===S.open)); return; }
   if(a==="noDel"){ S.confirmDel=null; $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===S.open)); return; }
   if(a==="delD"){ await deleteDossier(S.open); $("#sheet").innerHTML=""; S.open=null; S.confirmDel=null; toast("Dossier supprimé."); return; }
   if(a==="addP"){ S.parrains.push({poste:"tous",nom:"",email:"",pourquoi:""}); render(); return; }
-  if(a==="saveP"){ document.querySelectorAll("[data-p]").forEach(i=>{ const [ix,k]=i.dataset.p.split(":"); S.parrains[+ix][k]=i.value.trim(); }); S.parrains=S.parrains.filter(p=>p.nom); await saveParrains(); toast("Parrains enregistrés."); render(); return; }
+  if(a==="saveP"){ document.querySelectorAll("[data-p]").forEach(i=>{ const [ix,k]=i.dataset.p.split(":"); S.parrains[+ix][k]= i.type==="checkbox" ? i.checked : i.value.trim(); }); S.parrains=S.parrains.filter(p=>p.nom); await saveParrains(); toast("Parrains enregistrés."); render(); return; }
   if(a==="saveSet"){ document.querySelectorAll("[data-set]").forEach(i=>S.settings[i.dataset.set]=i.value.trim()); await saveSettings(); toast("Réglages enregistrés."); return; }
   if(a==="purge"){ const m=+$("#purgeM").value, lim=new Date(); lim.setMonth(lim.getMonth()-m); const old=S.dossiers.filter(d=>d.date && new Date(d.date)<lim); if(!old.length){ toast("Aucun dossier aussi ancien."); return; } if(t.dataset.confirm!=="1"){ t.dataset.confirm="1"; t.textContent=`Confirmer la suppression de ${old.length} dossier(s)`; return; } for(const d of old) await deleteDossier(d.id); toast(`${old.length} dossier(s) supprimé(s).`); return; }
   if(a==="sigclear"){ S.sig=null; render(); return; }
