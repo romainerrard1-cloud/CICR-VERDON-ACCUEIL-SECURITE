@@ -114,11 +114,11 @@ export default async (req: Request, _context: Context) => {
     if (p[0] === "state" && m === "GET") {
       { const cur = await st.get("config/parrains", { type: "json" }) as any;
         if (!(cur?.seeded >= 2)) await st.setJSON("config/parrains", { list: mergeDefaults(cur?.list || []), seeded: 2 }); }
-      const [dossiers, recus, parrains, settings] = await Promise.all([
+      const [dossiers, recus, parrains, settings, reaccueils] = await Promise.all([
         listJSON("dossiers/"), listJSON("recus/"),
-        st.get("config/parrains", { type: "json" }), st.get("config/settings", { type: "json" }),
+        st.get("config/parrains", { type: "json" }), st.get("config/settings", { type: "json" }), listJSON("reaccueils/"),
       ]);
-      return json({ dossiers, recus, parrains: (parrains as any)?.list || [], settings: settings || {}, mailOk: mailConfigured() });
+      return json({ dossiers, recus, reaccueils, parrains: (parrains as any)?.list || [], settings: settings || {}, mailOk: mailConfigured() });
     }
 
     if (p[0] === "dossiers" && p[1] && safeId(p[1])) {
@@ -164,6 +164,19 @@ export default async (req: Request, _context: Context) => {
         await st.setJSON("dossiers/" + d.id, d);
         return json({ ok: true, dossier: d });
       }
+    }
+
+    if (p[0] === "reaccueils" && p[1] && safeId(p[1])) {
+      if (m === "PUT") {
+        const raw = await req.text();
+        if (raw.length > 1500000) return json({ error: "trop lourd" }, 413);
+        const r = JSON.parse(raw);
+        r.id = p[1];
+        r.updatedAt = new Date().toISOString();
+        await st.setJSON("reaccueils/" + p[1], r);
+        return json({ ok: true });
+      }
+      if (m === "DELETE") { await st.delete("reaccueils/" + p[1]); return json({ ok: true }); }
     }
 
     if (p[0] === "recus" && p[1] && safeId(p[1])) {

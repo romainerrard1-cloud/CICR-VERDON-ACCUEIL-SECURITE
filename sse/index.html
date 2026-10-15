@@ -131,7 +131,7 @@ const critHtml = p => `<div class="crits">${CRIT.map(([k,l])=>`<span class="chip
 const STAR_KEYS = ["accueil","consignes","parrain","securite","experience","c_securite","c_risques","c_epi","c_gestes","c_autonomie","c_qualite","c_ponctualite","c_hierarchie","c_equipe","c_vigilance"];
 
 /* ===================== État ===================== */
-const S = {tab:"todo", recus:[], dossiers:[], parrains:[], settings:{...DEFAULT_SETTINGS}, ready:false, dbOk:true, open:null, mail:null, imp:null, sig:null, decision:"Validé", comment:"", fetchMsg:"", fetching:false, delSubs:true, mailOk:false, mailPrev:null};
+const S = {tab:"todo", recus:[], dossiers:[], reaccueils:[], reac:null, parrains:[], settings:{...DEFAULT_SETTINGS}, ready:false, dbOk:true, open:null, mail:null, imp:null, sig:null, decision:"Validé", comment:"", fetchMsg:"", fetching:false, delSubs:true, mailOk:false, mailPrev:null};
 let TOKEN=null;
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -217,6 +217,7 @@ async function ficheInto(pdf,d){
     if(tr.obs) kv("Observations",tr.obs);
     await sigImg("Signature de l'arrivant",tr.sigArrivant); await sigImg("Signature chef d'équipe / SSE",tr.sigResp);
   }
+  if(reacsOf(d).length){ sec("Réaccueils intérimaire (MASE 2.2.2)"); reacsOf(d).forEach(x=>kv("Réaccueil du "+fmt(x.date+"T12:00:00"),"Par "+[x.resp,x.fonction].filter(Boolean).join(", ")+(x.derniereMission?" · après "+dureeTxt(x.derniereMission,x.date)+" d'interruption":"")+" · "+(POSTES[x.poste]||"")+", "+reacLieu(x)+" · signé par les deux parties", green)); }
   if(d.finMission){ sec("Fin de mission"); kv("Date de fin de mission",fmt(d.finMission+"T12:00:00")); }
   sec("4. Suivi et communication"); STEPS.filter(st=>!st.local&&!st.nomail).forEach(st=>{ const s=(d.steps||{})[st.k]||{}; kv(st.l, s.doneAt?"Répondu le "+fmt(s.doneAt)+(s.sentAt?" (envoyé le "+fmt(s.sentAt)+")":""):s.sentAt?"Envoyé le "+fmt(s.sentAt)+(st.form?", en attente de réponse":""):"Non envoyé", s.doneAt||(!st.form&&s.sentAt)?green:null); });
   const block=(k,title)=>{ const s=(d.steps||{})[k]||{}, a=s.answers; sec(title); if(!a){ kv("Statut","Pas encore de réponse"); return; } Object.entries(a).filter(([x,v])=>LABELS[x]&&v!=="").forEach(([x,v])=>kv(LABELS[x], STAR_KEYS.includes(x)?stars(v):v)); kv("Date",fmt(s.doneAt)); return s; };
@@ -254,14 +255,14 @@ async function saveSettings(){ await api("config/settings",{method:"PUT",body:JS
 async function load(quiet){
   try{
     const j=await (await api("state")).json();
-    S.dossiers=j.dossiers||[];
+    S.dossiers=j.dossiers||[]; S.reaccueils=j.reaccueils||[];
     S.recus=(j.recus||[]).map(r=>({...r, nom:r.payload?.nom||"", prenom:r.payload?.prenom||""})).sort((a,b)=>(a.created_at||"").localeCompare(b.created_at||""));
     if(S.tab!=="parrains"||!quiet) S.parrains=j.parrains||[];
     S.mailOk=!!j.mailOk; S.settings={...DEFAULT_SETTINGS,...(j.settings||{})}; if(!S.settings.site) S.settings.site=location.origin;
     S.dbOk=true;
   }catch(e){ if(e.code==="auth") return; S.dbOk=false; }
   S.ready=true;
-  if(!(quiet && (S.tab==="import"||S.tab==="parrains"||S.tab==="reglages"||$("#sheet").innerHTML))) render(); else renderTabs();
+  if(!(quiet && (S.tab==="import"||S.tab==="reac"||S.tab==="parrains"||S.tab==="reglages"||$("#sheet").innerHTML))) render(); else renderTabs();
 }
 async function boot(){ await load(false); clearInterval(window.__poll); window.__poll=setInterval(()=>{ if(TOKEN && document.visibilityState==="visible") load(true); },60000); }
 function download(blob,name){ name=String(name).normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^\w.\-]+/g,"_"); const u=URL.createObjectURL(blob),a=document.createElement("a"); a.href=u; a.download=name; document.body.appendChild(a); a.click(); a.remove(); setTimeout(()=>URL.revokeObjectURL(u),4000); }
@@ -276,16 +277,17 @@ function setFavicon(n){
 function renderTabs(){
   const n=tasks().filter(t=>t.cls!=="t-soon").length;
   document.title = (n?`(${n}) `:"")+"Espace SSE CICR Verdon"; setFavicon(n);
-  const T=[["todo","À faire",n],["dossiers","Arrivants"],["import","Basculer une attestation"],["parrains","Parrains tuteurs"],["reglages","Réglages"]];
+  const T=[["todo","À faire",n],["dossiers","Arrivants"],["import","Basculer une attestation"],["reac","Réaccueil intérimaire"],["parrains","Parrains tuteurs"],["reglages","Réglages"]];
   $("#tabs").innerHTML=T.map(([k,l,c])=>`<button class="tab" data-tab="${k}" aria-current="${S.tab===k?"page":"false"}">${l}${c?`<span class="badge">${c}</span>`:""}</button>`).join("")+`<button class="tab" data-act="logout" title="Se déconnecter">Quitter</button>`;
 }
 function render(){
   renderTabs();
   if(!S.ready) return;
   const v = !S.dbOk ? `<div class="callout bad"><b>Le site ne répond pas pour l'instant.</b><span>Vérifiez votre connexion puis cliquez sur « Actualiser ».</span><button class="btn small" data-act="fetch" style="margin-top:8px">Actualiser</button></div>`
-    : S.tab==="todo"?vTodo(): S.tab==="dossiers"?vDossiers(): S.tab==="import"?vImport(): S.tab==="parrains"?vParrains(): vReglages();
+    : S.tab==="todo"?vTodo(): S.tab==="dossiers"?vDossiers(): S.tab==="import"?vImport(): S.tab==="reac"?vReac(): S.tab==="parrains"?vParrains(): vReglages();
   $("#app").innerHTML=v;
   if(S.tab==="import") setupSig();
+  if(S.tab==="reac"&&S.dbOk) setupRSig();
 }
 function vTodo(){
   const T=tasks(), act=T.filter(t=>t.cls!=="t-soon"), soon=T.filter(t=>t.cls==="t-soon");
@@ -403,10 +405,12 @@ function vDetail(d){
         return `<div><div class="tl ${c}"><i></i><span><b>${st.l}</b><br><span class="hint">${s.error&&!s.sentAt?`<span style="color:var(--bad)">Échec d'envoi : ${esc(s.error)}</span>`:r.state==="ok"?(st.local?`Fait le ${fmt(d.terrain?.date?d.terrain.date+"T12:00:00":s.doneAt)}`:st.nomail?`Confirmé le ${fmt(s.doneAt)}`:st.form?`Répondu le ${fmt(s.doneAt)}`:`${s.auto?"Envoyé automatiquement":"Envoyé"} le ${fmt(s.sentAt)}`):r.state==="wait"?`Envoyé le ${fmt(s.sentAt)}, en attente de réponse`:r.state==="blocked"?"Désignez d'abord le parrain":`${S.mailOk?"Envoi automatique le":"Prévu le"} ${fmt(r.due)}`}</span></span>
           <span>${st.local?`<button class="btn ${r.state==="ok"?"ghost":""} small" data-terrain="${d.id}">${r.state==="ok"?"Voir / modifier":"Remplir"}</button>`:st.nomail?"":r.state==="blocked"?"":`<button class="btn ghost small" data-mail="${d.id}:${st.k}">${r.state==="ok"&&!st.form?"Revoir":"Mail"}</button>`}</span></div>${st.form&&!st.nomail?ans(st.k):""}${st.local&&d.terrain?.doneAt?`<p class="hint" style="margin:4px 0 0 26px">Avec ${esc(d.terrain.chef||"—")} · ${(d.terrain.epi||[]).length} EPI remis${d.terrain.reprise?" · reprise des risques majeurs faite":""}</p>`:""}${st.nomail&&s.doneAt?`<p class="hint" style="margin:4px 0 0 26px">Par ${esc(s.answers?.signataire||"")}</p>`:""}</div>`; }).join("")}</div></div>
       <div class="panel" style="padding:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">${d.finMission?`<span><b>Fin de mission le ${fmt(d.finMission+"T12:00:00")}</b> · l'évaluation du parrain et le questionnaire arrivant sont à envoyer maintenant.</span><button class="btn ghost small" data-act="unFin">Annuler</button>`:`<span class="hint">Mission courte ? Déclenchez l'évaluation du parrain et le questionnaire de l'arrivant sans attendre 1 mois.</span><input type="date" id="finDate" value="${new Date().toISOString().slice(0,10)}" style="width:auto"><button class="btn small" data-act="finMission">Fin de mission</button>`}</div>
+      ${reacsOf(d).length?`<div><p class="lbl" style="margin-bottom:6px">Réaccueils intérimaire</p>${reacsOf(d).map(x=>`<div class="trow"><span>Le ${fmt(x.date+"T12:00:00")} avec ${esc(x.resp||"—")}${x.derniereMission?` · après ${esc(dureeTxt(x.derniereMission,x.date))} d'interruption`:""}</span><button class="btn ghost small" data-rpdfd="${x.id}">Fiche PDF</button></div>`).join("")}</div>`:""}
       ${d.finParrainage?`<div class="callout good"><span>Fin de la période d'accompagnement actée le ${fmt(d.finParrainage)} (MASE 2.2.1.9).</span></div>`:""}
       <div style="border-top:1px solid var(--line);padding-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${S.confirmDel===d.id?`<span class="hint">Supprimer définitivement ce dossier ?</span><button class="btn danger small" data-act="delD">Oui, supprimer</button><button class="btn ghost small" data-act="noDel">Annuler</button>`:`<button class="btn ghost small" data-act="askDel">Supprimer le dossier</button>`}</div>
     </div></div></div>`;
 }
+const reacsOf = d=>(S.reaccueils||[]).filter(x=>x.dossierId===d.id).sort((a,b)=>(a.date||"").localeCompare(b.date||""));
 const T_VISITE=[["visite","Visite du site : issues de secours, extincteurs, point de rassemblement, zone fumeur"],["equipe","Présentation de l'équipe, du chef d'équipe et du parrain tuteur"],["poste","Présentation du poste, des modes opératoires et des fiches machines"],["circulation","Règles de circulation et zones balisées rappelées"],["urgence","Numéro d'urgence et conduite à tenir en cas d'accident communiqués"],["pdp","PDP / PPSPS présenté et signé (chantier client)",true]];
 const T_EPI=["Tenue de travail","Chaussures de sécurité","Casque à jugulaire","Lunettes de protection","Gants adaptés","Protections auditives","Gilet haute visibilité","Masque / protection respiratoire","Masque de soudage","Harnais"];
 function terrainDraft(d){ const t=JSON.parse(JSON.stringify(d.terrain||{})); t.visite=t.visite||{}; t.epi=t.epi||[]; t.prat=t.prat||{}; t.forms=t.forms||{}; t.date=t.date||new Date().toISOString().slice(0,10); return t; }
@@ -531,6 +535,247 @@ async function openRecu(r){
   S.tab="import"; render(); window.scrollTo({top:0});
   if(r.hasPdf){ try{ const b=await (await api("recus/"+encodeURIComponent(r.id)+"/pdf")).arrayBuffer(); if(S.imp?.fromRecu===r.id){ S.imp.bytes=new Uint8Array(b); S.imp.loading=false; render(); } }catch(_){ if(S.imp){ S.imp.loading=false; render(); } } }
 }
+
+/* ===================== Réaccueil intérimaire (fiche recto verso) ===================== */
+/* Pour un intérimaire qui a déjà suivi l'accueil complet et revient après une interruption :
+   rappel court, 3 risques majeurs du poste, points clés, EPI, double signature. */
+const R_TOP3 = {soudeur:["soudage","hauteur","chimique"],tuyauteur:["hauteur","levage","conso"],chaudronnier:["machines","manu","levage"],monteur:["hauteur","conso","levage"],encadrant:["hauteur","levage","conso"],logisticien:["levage","manu","route"],dessinateur:["route","orga","ecran"],qc:["rayon","hauteur","orga"],bureau:["ecran","route","orga"],autre:["hauteur","levage","manu"]};
+const R_RISKS = {
+  hauteur:{t:"Travail en hauteur",c:["Protection collective d'abord : échafaudage réceptionné, nacelle, PIRL.","Casque avec jugulaire, zone balisée en dessous, jamais de travaux superposés.","Harnais réglé, vérifié avant usage et accroché à un ancrage conforme."],stop:"garde-corps absent, échafaudage non réceptionné, vent fort, ancrage douteux."},
+  levage:{t:"Levage et conduite d'engins",c:["Conduite d'engin : CACES, aptitude médicale et autorisation de conduite CICR.","Zone de manœuvre balisée, personne sous la charge, jamais.","Accessoires vérifiés (VGP à jour), charge guidée à distance avec un cordage."],stop:"charge inconnue, accessoire abîmé, ligne électrique proche, sol instable."},
+  manu:{t:"Manutention manuelle",c:["D'abord éviter de porter : chariot, palan, transpalette ou port à deux.","Au-delà d'environ 25 kg (moins si c'est répétitif), on mécanise.","Près de la charge, dos droit, jambes fléchies, chemin dégagé avant de partir."],stop:"charge trop lourde, encombrante ou instable : demander un moyen de manutention."},
+  soudage:{t:"Soudage, meulage et point chaud",c:["Permis de feu chez un client ou hors zone de soudage, extincteur à portée de main.","Fumées cancérogènes : captage à la source et ventilation, masque en complément.","Bouteilles debout et arrimées, flexibles valides, clapets anti-retour en place."],stop:"pas de permis de feu, pas d'extincteur, odeur de gaz, combustible impossible à protéger."},
+  machines:{t:"Machines et outils portatifs",c:["Seulement les machines pour lesquelles on est formé et autorisé.","Meuleuse : carter en place, disque adapté, ni fissuré ni périmé.","Jamais de sécurité neutralisée. On débranche avant de changer disque, lame ou foret."],stop:"carter absent, câble abîmé, arrêt d'urgence qui ne fonctionne pas."},
+  elec:{t:"Électricité",c:["Toute opération d'ordre électrique demande une habilitation (NF C 18-510).","Sans habilitation, on n'ouvre pas une armoire, même pour un fusible.","Rallonges et outils en bon état, câbles hors des passages et de l'eau."],stop:"câble dénudé, armoire ouverte, odeur de brûlé."},
+  conso:{t:"Consignation des énergies",c:["Avant d'intervenir, la tuyauterie ou la machine est consignée.","Séparer, condamner (son propre cadenas), identifier, vérifier l'absence d'énergie.","Jamais d'ouverture de bride sans confirmation : vidangée, purgée, à pression atmosphérique."],stop:"pas de consignation, pas de cadenas, doute sur le contenu de la ligne."},
+  confine:{t:"Espaces confinés",c:["Entrée uniquement avec un permis d'entrée et du personnel formé.","Atmosphère mesurée avant et pendant (détecteur 4 gaz), surveillant à l'extérieur.","On n'entre jamais secourir quelqu'un sans protection : on alerte."],stop:"pas de permis, détecteur absent ou en alarme, pas de surveillant."},
+  chimique:{t:"Produits chimiques et CMR",c:["Étiquette et fiche de données de sécurité (FDS) lues avant usage.","Produit dans son emballage d'origine, EPI indiqués par la FDS portés.","Ni manger, ni boire, ni fumer en zone de travail. Déversement : kit absorbant."],stop:"produit inconnu ou sans étiquette, EPI non disponibles."},
+  amiante:{t:"Amiante",c:["Avant travaux, le client fournit un repérage amiante.","Travaux sur matériaux amiantés : formation sous-section 4 et mode opératoire validé.","Matériau suspect (calorifuge qui s'effrite, joint fibreux ancien) : on ne touche pas."],stop:"doute sur un matériau : on balise et on prévient son responsable."},
+  atex:{t:"Atmosphères explosives (ATEX)",c:["Zones signalées par le panneau triangulaire jaune « EX ».","Aucune source d'inflammation : téléphone, outillage non ATEX, étincelles.","Point chaud : permis de feu, autorisation de travail et explosimètre."],stop:"alarme du détecteur, odeur de solvant ou de gaz."},
+  bruit:{t:"Bruit",c:["Dès 80 dB(A) des protections sont fournies, dès 85 dB(A) leur port est obligatoire.","Repère : s'il faut crier pour parler à 1 mètre, on est autour de 85 dB(A).","Bouchons bien insérés, sinon ils ne protègent presque pas."],stop:"protections absentes ou abîmées."},
+  rayon:{t:"Rayonnements ionisants",c:["Contrôle radio des soudures : zone balisée (trèfle, rubalise, feux).","On ne franchit jamais le balisage, on respecte les horaires de tirs annoncés.","Tout balisage abîmé ou déplacé se signale."],stop:"balisage franchi ou incomplet : on s'éloigne et on alerte."},
+  chaleur:{t:"Fortes chaleurs",c:["Boire de l'eau souvent, sans attendre d'avoir soif. Pauses à l'ombre.","Signes d'alerte : maux de tête, vertiges, nausées, crampes, propos confus.","Coup de chaleur = urgence (15 ou 112). Pas de travail seul par forte chaleur."],stop:"malaise : on arrête et on alerte."},
+  route:{t:"Risque routier",c:["Permis valide, toute suspension se signale sans délai.","Téléphone interdit en conduisant, oreillette comprise. Pause toutes les 2 heures.","Matériel arrimé, bouteilles de gaz debout et arrimées."],stop:"fatigue, véhicule en mauvais état, chargement non arrimé."},
+  bio:{t:"Risque biologique",c:["Réseaux d'eau, climatisation, eaux usées : permis de travail.","Combinaison, gants et bottes étanches, protection respiratoire.","Hygiène stricte : lavage des mains, pas de repas en zone de travail."],stop:"équipements de protection absents."},
+  orga:{t:"Circulation, coactivité, travail isolé",c:["Zone rangée, câbles et flexibles rangés : les chutes de plain-pied sont fréquentes.","Piétons sur les cheminements prévus, gilet haute visibilité près des engins.","Coactivité : plan de prévention ou PPSPS respecté. Pas de travail dangereux seul."],stop:"zone non balisée, engin qui manœuvre sans guide."},
+  ecran:{t:"Bureau et écran",c:["Haut de l'écran au niveau des yeux, à une longueur de bras.","Pieds à plat, dos soutenu, avant-bras posés.","Pauses régulières, on se lève."],stop:"douleurs persistantes : en parler au médecin du travail."}
+};
+const R_POINTS = [
+  ["Règles de base",[
+    ["regles","Alcool et drogues interdits. Tabac et vapotage uniquement dans les zones prévues."],
+    ["epiPort","EPI portés en permanence et adaptés à la zone. Un EPI abîmé se remplace, il ne se bricole pas."],
+    ["balisage","Signalisation et balisages respectés : on ne franchit jamais une zone balisée."]]],
+  ["Danger et alerte",[
+    ["retrait","Droit d'alerte et de retrait : mêmes droits que les salariés CICR, on alerte d'abord."],
+    ["remontee","Tout se signale : situation dangereuse, presque-accident, même une petite coupure."]]],
+  ["Urgence",[
+    ["pas","En cas d'accident : protéger, alerter, secourir."],
+    ["numeros","N° d'urgence interne du site client d'abord, sinon 112, 15 (SAMU) ou 18 (pompiers)."],
+    ["evac","Issues de secours, extincteurs et point de rassemblement localisés sur le lieu de mission."]]],
+  ["Habilitations et site",[
+    ["docs","Aptitude médicale, CACES, habilitations et qualifications toujours valides."],
+    ["client","Chantier client : plan de prévention ou PPSPS présenté et signé, permis avant toute intervention."]]],
+  ["Environnement",[
+    ["tri","Tri des déchets (inertes, non dangereux, dangereux, spécifiques), kit absorbant en cas de déversement."]]]
+];
+const R_KEYS = R_POINTS.flatMap(([,L])=>L.map(([k])=>k));
+const R_LIEUX = ["Atelier de Cambronne","Chanel","Sanofi","BASF Meaux","Autre chantier client"];
+const R_EPI = ["Tenue de travail","Chaussures de sécurité","Casque à jugulaire","Lunettes de protection","Gants adaptés","Protections auditives","Gilet haute visibilité","Masque / protection respiratoire","Masque de soudage","Harnais"];
+const isInterim = d=>/int[ée]rim/i.test(d?.statut||"");
+const monthsBetween = (a,b)=>{ if(!a||!b) return null; const x=new Date(a+"T12:00:00"), y=new Date(b+"T12:00:00"); if(isNaN(x)||isNaN(y)||y<x) return null; return (y.getFullYear()-x.getFullYear())*12+(y.getMonth()-x.getMonth())-(y.getDate()<x.getDate()?1:0); };
+const dureeTxt = (a,b)=>{ const m=monthsBetween(a,b); if(m==null) return ""; if(m<1){ const j=Math.round((new Date(b)-new Date(a))/864e5); return j+" jour"+(j>1?"s":""); } return m+" mois"; };
+function reacDraft(src){
+  const r={id:"", prenom:"", nom:"", agence:"", poste:"", lieu:"Atelier de Cambronne", lieuAutre:"", date:new Date().toISOString().slice(0,10), derniereMission:"", accueilInitial:"", dossierId:"", nouveautes:"", points:{}, risquesOk:{}, epi:[], epiAutre:"", obs:"", resp:S.settings.signataire||"", fonction:S.settings.fonction||"", sigInterim:null, sigResp:null};
+  return src?{...r,...JSON.parse(JSON.stringify(src))}:r;
+}
+function reacFromDossier(d){
+  const R=reacDraft(); const last=(S.reaccueils||[]).filter(x=>x.dossierId===d.id||(x.nom||"").toLowerCase()===(d.nom||"").toLowerCase()&&(x.prenom||"").toLowerCase()===(d.prenom||"").toLowerCase()).sort((a,b)=>(b.date||"").localeCompare(a.date||""))[0];
+  const site=siteOf(d), lieu=site==="atelier"?((d.lieux||[]).includes("Chantier client")?"Autre chantier client":"Atelier de Cambronne"):site;
+  Object.assign(R,{prenom:d.prenom||"", nom:d.nom||"", agence:d.agence||"", poste:d.poste||"", lieu, lieuAutre:lieu==="Autre chantier client"?(d.client||d.chantier||""):"", accueilInitial:(d.validatedAt||"").slice(0,10)||d.date||"", derniereMission:d.finMission||(last?.date)||"", dossierId:d.id});
+  return R;
+}
+const reacLieu = r=>r.lieu==="Autre chantier client"?(r.lieuAutre?"Chantier client "+r.lieuAutre:"Chantier client"):(r.lieu||"");
+const reacTop3 = r=>(R_TOP3[r.poste]||[]).map(k=>[k,R_RISKS[k]]).filter(x=>x[1]);
+
+let R_LOGO=null;
+async function reacLogo(){ if(R_LOGO) return R_LOGO; try{ const b=await (await fetch("/img/logo.png")).arrayBuffer(); R_LOGO=new Uint8Array(b); }catch(_){ R_LOGO=null; } return R_LOGO; }
+
+/* sign=false : fiche à imprimer (cases vides, pas de signature) ; sign=true : fiche cochée et signée à l'écran */
+async function reacPdf(r, sign){
+  const {PDFDocument,StandardFonts,rgb}=PDFLib; const pdf=await PDFDocument.create();
+  pdf.setTitle(pdfTxt("Réaccueil sécurité "+fullName(r)).trim()); pdf.setAuthor("CICR Verdon · service SSE");
+  const f=await pdf.embedFont(StandardFonts.Helvetica), fb=await pdf.embedFont(StandardFonts.HelveticaBold), fi=await pdf.embedFont(StandardFonts.HelveticaOblique), T=pdfTxt;
+  const mm=v=>v*2.8346, W=595.28, H=841.89, L=mm(14), R=W-mm(14), CW=R-L;
+  const ink=rgb(.1,.12,.15), grey=rgb(.38,.41,.45), soft=rgb(.94,.95,.97), line=rgb(.78,.8,.83), red=rgb(.75,.07,.16), blue=rgb(.17,.24,.61), green=rgb(.06,.48,.24);
+  const hex=c=>{ const n=parseInt(c.slice(1),16); return rgb((n>>16)/255,((n>>8)&255)/255,(n&255)/255); };
+  const logoB=await reacLogo(); const logo=logoB?await pdf.embedPng(logoB).catch(()=>null):null;
+  const wrapT=(t,size,font,maxW)=>{ const out=[]; let cur=""; T(t).split(/\s+/).filter(Boolean).forEach(w=>{ const n=cur?cur+" "+w:w; if(font.widthOfTextAtSize(n,size)>maxW){ if(cur) out.push(cur); cur=w; } else cur=n; }); if(cur) out.push(cur); return out; };
+  const txt=(pg,t,x,y,size,font,color)=>pg.drawText(T(t),{x,y,size,font:font||f,color:color||ink});
+  const box=(pg,x,y,s,checked)=>{ pg.drawRectangle({x,y,width:s,height:s,borderColor:ink,borderWidth:.8,color:rgb(1,1,1)}); if(checked){ pg.drawLine({start:{x:x+s*.18,y:y+s*.5},end:{x:x+s*.42,y:y+s*.22},thickness:1.4,color:green}); pg.drawLine({start:{x:x+s*.42,y:y+s*.22},end:{x:x+s*.85,y:y+s*.85},thickness:1.4,color:green}); } };
+  const band=pg=>["#e4003a","#f07d00","#f2c200","#3aaa35","#0071b9","#6c2c8c"].forEach((c,i)=>pg.drawRectangle({x:i*W/6,y:H-mm(2),width:W/6,height:mm(2),color:hex(c)}));
+  const sec=(pg,y,t)=>{ pg.drawRectangle({x:L,y:y-mm(1.8),width:CW,height:mm(6.4),color:blue}); txt(pg,t.toUpperCase(),L+mm(2.5),y,9,fb,rgb(1,1,1)); return y-mm(7.5); };
+  const foot=(pg,n)=>{ pg.drawLine({start:{x:L,y:mm(11)},end:{x:R,y:mm(11)},thickness:.5,color:line}); txt(pg,"CICR Verdon · Fiche de réaccueil sécurité intérimaire · MASE 2.2.2 · Service SSE : Romain Errard, 06 72 01 26 07",L,mm(7),7,f,grey); const s=n===1?"Recto":"Verso"; txt(pg,s,R-f.widthOfTextAtSize(s,7.5),mm(7),7.5,fb,grey); };
+  const field=(pg,x,y,w,label,val)=>{ txt(pg,label,x,y+mm(4.6),6.8,f,grey); if(val){ const v=wrapT(val,9.5,fb,w)[0]||""; txt(pg,v,x,y+mm(.6),9.5,fb); } pg.drawLine({start:{x,y:y-mm(.6)},end:{x:x+w,y:y-mm(.6)},thickness:.5,color:line}); };
+  const ruled=(pg,y,n,textLines)=>{ for(let i=0;i<n;i++){ const yy=y-i*mm(6.2); if(textLines&&textLines[i]) txt(pg,textLines[i],L+mm(1),yy+mm(1),9,f); pg.drawLine({start:{x:L,y:yy},end:{x:R,y:yy},thickness:.5,color:line}); } return y-n*mm(6.2); };
+  const blank=!sign;
+
+  /* ---------- RECTO ---------- */
+  let pg=pdf.addPage([W,H]); band(pg); let y=H-mm(8);
+  if(logo){ const h=mm(13), w=h*logo.width/logo.height; pg.drawImage(logo,{x:L,y:y-h,width:w,height:h}); }
+  const tx=L+(logo?mm(36):0);
+  txt(pg,"FICHE DE RÉACCUEIL SÉCURITÉ",tx,y-mm(5.5),16,fb); txt(pg,"Intérimaire déjà accueilli chez CICR, de retour après une interruption",tx,y-mm(10.5),9,f,grey);
+  y-=mm(19);
+  pg.drawRectangle({x:L,y:y-mm(37),width:CW,height:mm(39),borderColor:line,borderWidth:.8});
+  const c1=L+mm(3), c2=L+CW/2+mm(2), fw=CW/2-mm(6); let fy=y-mm(6);
+  const dInt=dureeTxt(r.derniereMission,r.date);
+  [[["Nom et prénom",fullName(r)],["Agence d'intérim",r.agence]],[["Poste",POSTES[r.poste]||""],["Lieu de mission",reacLieu(r)]],[["Date du réaccueil",r.date?fmt(r.date+"T12:00:00"):""],["Fin de la dernière mission chez CICR",r.derniereMission?fmt(r.derniereMission+"T12:00:00"):""]],[["Accueil sécurité complet suivi le",r.accueilInitial?fmt(r.accueilInitial+"T12:00:00"):""],["Durée de l'interruption",dInt]]].forEach(([a,b])=>{ field(pg,c1,fy,fw,a[0],a[1]); field(pg,c2,fy,fw,b[0],b[1]); fy-=mm(9); });
+  y-=mm(41);
+  pg.drawRectangle({x:L,y:y-mm(8.6),width:CW,height:mm(10.6),color:rgb(1,.96,.85)});
+  wrapT("Le réaccueil ne remplace l'accueil complet que pour un retour sur le même poste, dans un lieu déjà connu. Nouveau poste ou nouveau site client : l'accueil sécurité complet est à refaire (module en ligne et accueil au poste).",8,f,CW-mm(5)).slice(0,3).forEach((l,i)=>txt(pg,l,L+mm(2.5),y-mm(2.6)-i*mm(3.5),8,f,rgb(.45,.33,0)));
+  y-=mm(14);
+  y=sec(pg,y,"1. Ce qui a changé depuis votre dernière mission");
+  txt(pg,"Nouvelles règles, nouveaux équipements ou outils, organisation, consignes du client, retours d'accidents et presque-accidents.",L,y,7.5,fi,grey); y-=mm(6.5);
+  y=ruled(pg,y,5,wrapT(r.nouveautes||"",9,f,CW-mm(2)).slice(0,5)); y-=mm(6);
+  y=sec(pg,y,"2. Les 3 risques majeurs de votre poste, repris ensemble");
+  const top=reacTop3(r);
+  if(top.length){
+    top.forEach(([k,rk],i)=>{
+      pg.drawRectangle({x:L,y:y-mm(1.6),width:CW,height:mm(6),color:soft});
+      txt(pg,`${i+1}. ${rk.t}`,L+mm(2),y,10,fb);
+      const lab="Repris avec l'intérimaire"; txt(pg,lab,R-mm(7)-f.widthOfTextAtSize(lab,7.5),y+mm(.2),7.5,f,grey); box(pg,R-mm(5.5),y-mm(.6),mm(3.6),sign&&!!r.risquesOk?.[k]);
+      y-=mm(6);
+      y-=mm(.8);
+      rk.c.forEach(c=>{ wrapT(c,9.2,f,CW-mm(8)).forEach((l,j)=>{ if(!j) pg.drawCircle({x:L+mm(3.5),y:y+mm(1.2),size:1.3,color:ink}); txt(pg,l,L+mm(6),y,9.2,f); y-=mm(4.5); }); });
+      const st=wrapT("STOP si : "+rk.stop,9.2,fb,CW-mm(8)); st.forEach(l=>{ txt(pg,l,L+mm(6),y,9.2,fb,red); y-=mm(4.5); });
+      y-=mm(4);
+    });
+  } else {
+    [1,2,3].forEach(i=>{ pg.drawRectangle({x:L,y:y-mm(1.6),width:CW,height:mm(6),color:soft}); txt(pg,`${i}. Risque :`,L+mm(2),y,10,fb); box(pg,R-mm(5.5),y-mm(.6),mm(3.6),false); y-=mm(7); y=ruled(pg,y,4); y-=mm(4); });
+  }
+  foot(pg,1);
+
+  /* ---------- VERSO ---------- */
+  pg=pdf.addPage([W,H]); band(pg); y=H-mm(10);
+  txt(pg,"Réaccueil sécurité",L,y,12,fb); const who=[fullName(r),r.date?fmt(r.date+"T12:00:00"):""].filter(Boolean).join(" · ")||"Nom : ......................................................   Date : ..................";
+  txt(pg,who,R-f.widthOfTextAtSize(T(who),9.5),y,9.5,f,grey); y-=mm(8);
+  y=sec(pg,y,"3. Points rappelés");
+  R_POINTS.forEach(([g,list])=>{
+    txt(pg,g,L,y,8.5,fb,blue); y-=mm(4.6);
+    list.forEach(([k,l])=>{ box(pg,L+mm(1),y-mm(.7),mm(3.4),sign&&!!r.points?.[k]); const ls=wrapT(l,8.8,f,CW-mm(9)); ls.forEach((t,j)=>{ txt(pg,t,L+mm(7),y-j*mm(3.9),8.8,f); }); y-=ls.length*mm(3.9)+mm(1.6); });
+    y-=mm(1.2);
+  });
+  y-=mm(1.5);
+  y=sec(pg,y,"4. EPI vérifiés : état, taille, adaptés au poste");
+  const colW=CW/2; R_EPI.forEach((e,i)=>{ const x=L+(i%2)*colW, yy=y-Math.floor(i/2)*mm(5.4); box(pg,x+mm(1),yy-mm(.7),mm(3.4),sign&&r.epi?.includes(e)); txt(pg,e,x+mm(7),yy,8.8,f); });
+  y-=Math.ceil(R_EPI.length/2)*mm(5.4);
+  txt(pg,"Autre :",L+mm(1),y,8.8,f,grey); if(r.epiAutre) txt(pg,r.epiAutre,L+mm(13),y,8.8,fb); pg.drawLine({start:{x:L+mm(12),y:y-mm(1)},end:{x:R,y:y-mm(1)},thickness:.5,color:line}); y-=mm(8);
+  y=sec(pg,y,"5. Questions de l'intérimaire et observations"); y-=mm(3);
+  y=ruled(pg,y,3,wrapT(r.obs||"",9,f,CW-mm(2)).slice(0,3)); y-=mm(6);
+  y=sec(pg,y,"6. Engagement et signatures");
+  const sw=CW/2-mm(3), sx2=L+CW/2+mm(3), sigH=mm(30);
+  const col=(x,title,engage,rows,sig)=>{ let yy=y; txt(pg,title,x,yy,9.5,fb); yy-=mm(4.4);
+    const el=wrapT(engage,7.8,fi,sw); el.forEach((l,i)=>txt(pg,l,x,yy-i*mm(3.4),7.8,fi,grey)); yy-=3*mm(3.4)+mm(6.5);
+    rows.forEach(([l,v])=>{ field(pg,x,yy,sw,l,v); yy-=mm(8.2); });
+    txt(pg,"Signature",x,yy+mm(1.4),6.8,f,grey); pg.drawRectangle({x,y:yy-sigH,width:sw,height:sigH,borderColor:line,borderWidth:.8});
+    return {yy,sig}; };
+  const a=col(L,"L'intérimaire","Je reconnais avoir reçu ce réaccueil sécurité, avoir pu poser mes questions, et je m'engage à respecter les règles et consignes rappelées.",[["Nom et prénom",fullName(r)],["Date",r.date?fmt(r.date+"T12:00:00"):""]],r.sigInterim);
+  const b=col(sx2,"Le responsable de l'accueil","Je certifie avoir réalisé ce réaccueil, repris les risques majeurs du poste et vérifié les EPI et la validité des habilitations.",[["Nom, prénom et fonction",[r.resp,r.fonction].filter(Boolean).join(", ")],["Date",r.date?fmt(r.date+"T12:00:00"):""]],r.sigResp);
+  if(sign){ for(const [x,o] of [[L,a],[sx2,b]]){ if(!o.sig) continue; const im=await pdf.embedPng(o.sig); const s=Math.min((sw-mm(2))/im.width,(sigH-mm(2))/im.height); const w=im.width*s, h=im.height*s; pg.drawImage(im,{x:x+(sw-w)/2,y:o.yy-sigH+(sigH-h)/2,width:w,height:h}); } }
+  foot(pg,2);
+  return await pdf.save();
+}
+async function reacDownload(r,sign){ const out=await reacPdf(r,sign); download(new Blob([out],{type:"application/pdf"}),(sign?"Reaccueil_signe_":r.nom?"Reaccueil_a_imprimer_":"Fiche_reaccueil_vierge")+(r.nom?`${r.nom}_${r.prenom}_${r.date||""}`:"")+".pdf"); }
+
+function vReac(){
+  const r=S.reac||(S.reac=reacDraft()), top=reacTop3(r), M=monthsBetween(r.derniereMission,r.date);
+  const L=(S.reaccueils||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||"").localeCompare(a.createdAt||""));
+  const doss=S.dossiers.slice().sort((a,b)=>(isInterim(b)-isInterim(a))||fullName(a).localeCompare(fullName(b)));
+  const nPts=R_KEYS.filter(k=>r.points[k]).length;
+  return `<div class="head"><div><p class="eyebrow">Intérimaire déjà accueilli, de retour après une interruption</p><h2>Réaccueil intérimaire</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-ract="blank">Fiche vierge à imprimer (PDF)</button>${r.id||r.nom?`<button class="btn ghost" data-ract="new">Nouveau réaccueil</button>`:""}</div></div>
+  <div class="callout info" style="margin-bottom:12px"><span><b>Une feuille recto verso au lieu de l'accueil complet.</b> Recto : identité, ce qui a changé, les 3 risques majeurs du poste. Verso : points rappelés, EPI, questions, signatures de l'intérimaire et du responsable de l'accueil. Remplissez et signez ici, ou imprimez la fiche et faites-la signer à la main.</span></div>
+  <div class="panel tform">
+    <div class="field"><label>Intérimaire déjà accueilli (facultatif)</label><select data-rpick><option value="">— Choisir un arrivant pour préremplir —</option>${doss.map(d=>`<option value="${d.id}" ${r.dossierId===d.id?"selected":""}>${esc(fullName(d))} · ${esc(d.posteLabel||"")}${d.statut?" · "+esc(d.statut):""}</option>`).join("")}</select><span class="hint">Ou saisissez directement ses informations ci-dessous.</span></div>
+    <div class="grid2">
+      ${[["prenom","Prénom"],["nom","Nom"],["agence","Agence d'intérim"]].map(([k,l])=>`<div class="field"><label>${l}</label><input data-rf="${k}" value="${esc(r[k]||"")}"></div>`).join("")}
+      <div class="field"><label>Poste</label><select data-rf="poste"><option value="">— Choisir —</option>${Object.entries(POSTES).map(([k,l])=>`<option value="${k}" ${r.poste===k?"selected":""}>${l}</option>`).join("")}</select></div>
+      <div class="field"><label>Lieu de mission</label><select data-rf="lieu">${R_LIEUX.map(l=>`<option ${r.lieu===l?"selected":""}>${l}</option>`).join("")}</select></div>
+      ${r.lieu==="Autre chantier client"?`<div class="field"><label>Quel client ?</label><input data-rf="lieuAutre" value="${esc(r.lieuAutre||"")}"></div>`:`<div></div>`}
+      <div class="field"><label>Date du réaccueil</label><input type="date" data-rf="date" value="${esc(r.date||"")}"></div>
+      <div class="field"><label>Fin de sa dernière mission chez CICR</label><input type="date" data-rf="derniereMission" value="${esc(r.derniereMission||"")}"></div>
+      <div class="field"><label>Accueil sécurité complet suivi le</label><input type="date" data-rf="accueilInitial" value="${esc(r.accueilInitial||"")}"></div>
+      <div class="field"><label>Durée de l'interruption</label><input value="${esc(dureeTxt(r.derniereMission,r.date)||"—")}" disabled></div>
+    </div>
+    ${M!=null&&M>=12?`<div class="callout warn"><span><b>Plus d'un an d'interruption.</b> Vérifiez que rien n'a trop changé pour lui ou elle. En cas de doute, faites-lui refaire l'accueil complet.</span></div>`:""}
+    <div class="callout warn" style="background:var(--surface-2);color:var(--ink)"><span>Nouveau poste ou nouveau site client : le réaccueil ne suffit pas, l'accueil sécurité complet est à refaire.</span></div>
+    <fieldset><legend>1. Ce qui a changé depuis sa dernière mission</legend><textarea data-rf="nouveautes" placeholder="Nouvelles règles, nouveaux équipements, organisation, consignes du client, retours d'accidents…">${esc(r.nouveautes||"")}</textarea></fieldset>
+    <fieldset><legend>2. Les 3 risques majeurs du poste</legend>${top.length?top.map(([k,rk],i)=>`<label class="tcheck" style="padding:6px 0;border-bottom:1px solid var(--line);align-items:flex-start"><input type="checkbox" data-rrisk="${k}" ${r.risquesOk[k]?"checked":""} style="margin-top:4px"><span><b>${i+1}. ${esc(rk.t)}</b><br><span class="hint">${esc(rk.c.join(" "))} <span style="color:var(--bad)">STOP si : ${esc(rk.stop)}</span></span></span></label>`).join(""):`<p class="hint" style="margin:0">Choisissez le poste pour afficher ses 3 risques majeurs.</p>`}</fieldset>
+    <fieldset><legend>3. Points rappelés <span class="hint">(${nPts}/${R_KEYS.length})</span></legend><div style="margin-bottom:6px"><button class="btn ghost small" data-ract="allPts">${nPts===R_KEYS.length?"Tout décocher":"Tout cocher"}</button></div>
+      ${R_POINTS.map(([g,list])=>`<p class="lbl" style="margin:8px 0 4px">${g}</p>${list.map(([k,l])=>`<label class="tcheck" style="padding:3px 0"><input type="checkbox" data-rpt="${k}" ${r.points[k]?"checked":""}> ${esc(l)}</label>`).join("")}`).join("")}</fieldset>
+    <fieldset><legend>4. EPI vérifiés</legend><div class="tchecks">${R_EPI.map(e=>`<label><input type="checkbox" data-repi="${esc(e)}" ${r.epi.includes(e)?"checked":""}> ${e}</label>`).join("")}</div><input data-rf="epiAutre" value="${esc(r.epiAutre||"")}" placeholder="Autre EPI (facultatif)" style="margin-top:8px"></fieldset>
+    <div class="field"><label>5. Questions de l'intérimaire et observations (facultatif)</label><textarea data-rf="obs">${esc(r.obs||"")}</textarea></div>
+    <div class="grid2"><div class="field"><label>Responsable de l'accueil</label><input data-rf="resp" value="${esc(r.resp||"")}" placeholder="Prénom Nom"></div><div class="field"><label>Fonction</label><input data-rf="fonction" value="${esc(r.fonction||"")}" placeholder="Chef d'équipe, SSE…"></div></div>
+    <div class="grid2">
+      <div><p class="lbl">Signature de l'intérimaire</p><div class="sig-wrap tsig"><canvas data-rsig="sigInterim"></canvas><span class="ph" ${r.sigInterim?"hidden":""}>${esc(fullName(r)||"Signez ici")}</span></div><button class="btn ghost small" data-rsigclear="sigInterim" style="margin-top:6px">Effacer</button></div>
+      <div><p class="lbl">Signature du responsable de l'accueil</p><div class="sig-wrap tsig"><canvas data-rsig="sigResp"></canvas><span class="ph" ${r.sigResp?"hidden":""}>Signez ici</span></div><button class="btn ghost small" data-rsigclear="sigResp" style="margin-top:6px">Effacer</button></div>
+    </div>
+    <p class="err" id="rerr" style="margin:0;color:var(--bad)"></p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn good" data-ract="save">Enregistrer et télécharger la fiche signée</button><button class="btn ghost" data-ract="print">Télécharger pour imprimer et signer à la main</button></div>
+  </div>
+  <p class="sec-h">Réaccueils enregistrés</p>
+  ${L.length?`<div class="tbl"><table><thead><tr><th>Date</th><th>Intérimaire</th><th>Poste et lieu</th><th>Interruption</th><th>Responsable</th><th></th></tr></thead><tbody>
+  ${L.map(x=>`<tr><td>${fmt(x.date?x.date+"T12:00:00":"")}</td><td><b>${esc(fullName(x))}</b>${x.agence?`<br><span class="hint">${esc(x.agence)}</span>`:""}</td><td>${esc(POSTES[x.poste]||"")}<br><span class="hint">${esc(reacLieu(x))}</span></td><td>${esc(dureeTxt(x.derniereMission,x.date)||"—")}</td><td>${esc(x.resp||"")}</td><td style="white-space:nowrap">${S.confirmReac===x.id?`<button class="btn danger small" data-rdel="${x.id}">Supprimer</button> <button class="btn ghost small" data-ract="noDelR">Annuler</button>`:`<button class="btn ghost small" data-rpdf="${x.id}">PDF</button> <button class="btn ghost small" data-rask="${x.id}" title="Supprimer">✕</button>`}</td></tr>`).join("")}
+  </tbody></table></div>`:`<div class="empty"><b>Aucun réaccueil enregistré.</b><span>Les fiches signées ici sont gardées dans cette liste et dans le dossier de l'arrivant.</span></div>`}`;
+}
+function setupRSig(){
+  document.querySelectorAll("canvas[data-rsig]").forEach(c=>{ const key=c.dataset.rsig;
+    const r=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1; c.width=r.width*dpr; c.height=r.height*dpr;
+    const x=c.getContext("2d"); x.scale(dpr,dpr); x.lineWidth=2.4; x.lineCap="round"; x.lineJoin="round"; x.strokeStyle="#1b2a6b";
+    if(S.reac[key]){ const im=new Image(); im.onload=()=>x.drawImage(im,0,0,r.width,r.height); im.src=S.reac[key]; }
+    let dr=false,mv=false; const pos=e=>{const b=c.getBoundingClientRect(); return [e.clientX-b.left,e.clientY-b.top];};
+    c.addEventListener("pointerdown",e=>{dr=true;mv=false;c.setPointerCapture(e.pointerId);const[a,b]=pos(e);x.beginPath();x.moveTo(a,b);});
+    c.addEventListener("pointermove",e=>{if(!dr)return;const[a,b]=pos(e);x.lineTo(a,b);x.stroke();mv=true;c.nextElementSibling.hidden=true;});
+    const end=()=>{ if(!dr) return; dr=false; if(mv){ const o=document.createElement("canvas"); o.width=600; o.height=Math.round(600*r.height/r.width); o.getContext("2d").drawImage(c,0,0,o.width,o.height); S.reac[key]=o.toDataURL("image/png"); } };
+    c.addEventListener("pointerup",end); c.addEventListener("pointercancel",end); });
+}
+function reacRender(){ const sx=window.scrollY; render(); window.scrollTo({top:sx}); }
+async function saveReac(r){ const j=await (await api("reaccueils/"+encodeURIComponent(r.id),{method:"PUT",body:JSON.stringify(r)})).json(); const i=(S.reaccueils||[]).findIndex(x=>x.id===r.id); if(i<0) S.reaccueils.push(r); else S.reaccueils[i]=r; return j; }
+document.addEventListener("click",async e=>{
+  const t=e.target.closest("button"); if(!t) return;
+  if(t.dataset.rpdfd){ const x=(S.reaccueils||[]).find(y=>y.id===t.dataset.rpdfd); if(x) try{ await reacDownload(x,!!(x.sigInterim&&x.sigResp)); }catch(err){ console.error(err); toast("La fiche n'a pas pu être générée."); } return; }
+  if(S.tab!=="reac"||!S.reac) return;
+  const r=S.reac;
+  if(t.dataset.rsigclear){ r[t.dataset.rsigclear]=null; reacRender(); return; }
+  if(t.dataset.rpdf){ const x=(S.reaccueils||[]).find(y=>y.id===t.dataset.rpdf); if(x) try{ await reacDownload(x,!!(x.sigInterim&&x.sigResp)); }catch(err){ console.error(err); toast("La fiche n'a pas pu être générée."); } return; }
+  if(t.dataset.rask){ S.confirmReac=t.dataset.rask; reacRender(); return; }
+  if(t.dataset.rdel){ try{ await api("reaccueils/"+encodeURIComponent(t.dataset.rdel),{method:"DELETE"}); S.reaccueils=S.reaccueils.filter(x=>x.id!==t.dataset.rdel); toast("Réaccueil supprimé."); }catch(_){ toast("La suppression a échoué."); } S.confirmReac=null; reacRender(); return; }
+  const a=t.dataset.ract; if(!a) return;
+  if(a==="noDelR"){ S.confirmReac=null; reacRender(); return; }
+  if(a==="new"){ S.reac=reacDraft(); render(); window.scrollTo({top:0}); return; }
+  if(a==="blank"){ try{ await reacDownload(reacDraft({resp:"",fonction:"",date:"",lieu:""}),false); toast("Fiche vierge téléchargée : imprimez-la en recto verso."); }catch(err){ console.error(err); toast("La fiche n'a pas pu être générée."); } return; }
+  if(a==="allPts"){ const all=R_KEYS.every(k=>r.points[k]); R_KEYS.forEach(k=>r.points[k]=!all); reacRender(); return; }
+  if(a==="print"){ try{ await reacDownload(r,false); toast("Fiche préremplie téléchargée : imprimez-la en recto verso."); }catch(err){ console.error(err); toast("La fiche n'a pas pu être générée."); } return; }
+  if(a==="save"){ const er=$("#rerr"), miss=[];
+    if(!r.prenom||!r.nom) miss.push("le prénom et le nom"); if(!r.poste) miss.push("le poste"); if(!r.date) miss.push("la date");
+    if(top3Missing(r)) miss.push("les 3 risques majeurs"); if(!R_KEYS.every(k=>r.points[k])) miss.push("tous les points rappelés"); if(!r.epi.length&&!r.epiAutre) miss.push("les EPI vérifiés");
+    if(!r.resp) miss.push("le nom du responsable de l'accueil"); if(!r.sigInterim||!r.sigResp) miss.push("les deux signatures");
+    if(miss.length){ er.textContent="À compléter : "+miss.join(", ")+"."; er.scrollIntoView({block:"center"}); return; }
+    t.disabled=true; t.textContent="Enregistrement…";
+    if(!r.id){ r.id=("r-"+r.nom+"-"+r.prenom+"-"+r.date).toLowerCase().normalize("NFD").replace(/[^\w-]+/g,"").slice(0,60)+"-"+tok().slice(0,6); r.createdAt=new Date().toISOString(); }
+    try{ await reacDownload(r,true); }catch(err){ console.error(err); toast("Le PDF n'a pas pu être généré."); }
+    try{ await saveReac(JSON.parse(JSON.stringify(r))); toast("Réaccueil enregistré."); S.reac=reacDraft(); render(); window.scrollTo({top:0}); }
+    catch(err){ t.disabled=false; t.textContent="Enregistrer et télécharger la fiche signée"; er.textContent=err.code==="auth"?"Session expirée : reconnectez-vous, la fiche signée a bien été téléchargée.":"L'enregistrement a échoué (la fiche signée a bien été téléchargée). Réessayez."; }
+    return; }
+});
+const top3Missing = r=>{ const t=reacTop3(r); return !t.length || t.some(([k])=>!r.risquesOk[k]); };
+document.addEventListener("change",e=>{
+  if(S.tab!=="reac"||!S.reac) return; const el=e.target, r=S.reac;
+  if(el.dataset.rpick!==undefined){ const d=S.dossiers.find(x=>x.id===el.value); if(d){ const keep={resp:r.resp,fonction:r.fonction,date:r.date}; S.reac={...reacFromDossier(d),...keep}; reacRender(); } return; }
+  if(el.dataset.rrisk){ r.risquesOk[el.dataset.rrisk]=el.checked; return; }
+  if(el.dataset.rpt){ r.points[el.dataset.rpt]=el.checked; reacRender(); return; }
+  if(el.dataset.repi){ const v=el.dataset.repi; r.epi=r.epi.filter(x=>x!==v); if(el.checked) r.epi.push(v); return; }
+  if(el.dataset.rf){ r[el.dataset.rf]=el.value; if(["poste","lieu","date","derniereMission"].includes(el.dataset.rf)){ if(el.dataset.rf==="poste") r.risquesOk={}; reacRender(); } return; }
+});
+document.addEventListener("input",e=>{ if(S.tab==="reac"&&S.reac&&e.target.dataset.rf) S.reac[e.target.dataset.rf]=e.target.value; });
 
 /* ===================== Événements ===================== */
 document.addEventListener("click",async e=>{
