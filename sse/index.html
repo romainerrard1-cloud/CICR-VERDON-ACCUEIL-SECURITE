@@ -131,7 +131,7 @@ const critHtml = p => `<div class="crits">${CRIT.map(([k,l])=>`<span class="chip
 const STAR_KEYS = ["accueil","consignes","parrain","securite","experience","c_securite","c_risques","c_epi","c_gestes","c_autonomie","c_qualite","c_ponctualite","c_hierarchie","c_equipe","c_vigilance"];
 
 /* ===================== État ===================== */
-const S = {tab:"todo", recus:[], dossiers:[], reaccueils:[], reac:null, parrains:[], settings:{...DEFAULT_SETTINGS}, ready:false, dbOk:true, open:null, mail:null, imp:null, sig:null, decision:"Validé", comment:"", fetchMsg:"", fetching:false, delSubs:true, mailOk:false, mailPrev:null};
+const S = {tab:"todo", recus:[], dossiers:[], reaccueils:[], reac:null, reacMode:"ecran", reacFiles:[], parrains:[], settings:{...DEFAULT_SETTINGS}, ready:false, dbOk:true, open:null, mail:null, imp:null, sig:null, decision:"Validé", comment:"", fetchMsg:"", fetching:false, delSubs:true, mailOk:false, mailPrev:null};
 let TOKEN=null;
 const $ = s=>document.querySelector(s);
 const esc = s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
@@ -217,7 +217,7 @@ async function ficheInto(pdf,d){
     if(tr.obs) kv("Observations",tr.obs);
     await sigImg("Signature de l'arrivant",tr.sigArrivant); await sigImg("Signature chef d'équipe / SSE",tr.sigResp);
   }
-  if(reacsOf(d).length){ sec("Réaccueils intérimaire (MASE 2.2.2)"); reacsOf(d).forEach(x=>kv("Réaccueil du "+fmt(x.date+"T12:00:00"),"Par "+[x.resp,x.fonction].filter(Boolean).join(", ")+(x.derniereMission?" · après "+dureeTxt(x.derniereMission,x.date)+" d'interruption":"")+" · "+(POSTES[x.poste]||"")+", "+reacLieu(x)+" · signé par les deux parties", green)); }
+  if(reacsOf(d).length){ sec("Réaccueils intérimaire (MASE 2.2.2)"); reacsOf(d).forEach(x=>kv("Réaccueil du "+fmt(x.date+"T12:00:00"),"Par "+[x.resp,x.fonction].filter(Boolean).join(", ")+(x.derniereMission?" · après "+dureeTxt(x.derniereMission,x.date)+" d'interruption":"")+" · "+(POSTES[x.poste]||"")+", "+reacLieu(x)+" · "+(x.papier?"fiche papier signée par les deux parties, scan archivé":"signé à l'écran par les deux parties"), green)); }
   if(d.finMission){ sec("Fin de mission"); kv("Date de fin de mission",fmt(d.finMission+"T12:00:00")); }
   sec("4. Suivi et communication"); STEPS.filter(st=>!st.local&&!st.nomail).forEach(st=>{ const s=(d.steps||{})[st.k]||{}; kv(st.l, s.doneAt?"Répondu le "+fmt(s.doneAt)+(s.sentAt?" (envoyé le "+fmt(s.sentAt)+")":""):s.sentAt?"Envoyé le "+fmt(s.sentAt)+(st.form?", en attente de réponse":""):"Non envoyé", s.doneAt||(!st.form&&s.sentAt)?green:null); });
   const block=(k,title)=>{ const s=(d.steps||{})[k]||{}, a=s.answers; sec(title); if(!a){ kv("Statut","Pas encore de réponse"); return; } Object.entries(a).filter(([x,v])=>LABELS[x]&&v!=="").forEach(([x,v])=>kv(LABELS[x], STAR_KEYS.includes(x)?stars(v):v)); kv("Date",fmt(s.doneAt)); return s; };
@@ -686,15 +686,50 @@ async function reacPdf(r, sign){
 }
 async function reacDownload(r,sign){ const out=await reacPdf(r,sign); download(new Blob([out],{type:"application/pdf"}),(sign?"Reaccueil_signe_":r.nom?"Reaccueil_a_imprimer_":"Fiche_reaccueil_vierge")+(r.nom?`${r.nom}_${r.prenom}_${r.date||""}`:"")+".pdf"); }
 
+function reacHead(r){ return `<div class="head"><div><p class="eyebrow">Intérimaire déjà accueilli, de retour après une interruption</p><h2>Réaccueil intérimaire</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-ract="blank">Fiche vierge à imprimer (PDF)</button>${r.id||r.nom?`<button class="btn ghost" data-ract="new">Nouveau réaccueil</button>`:""}</div></div>
+  <div class="callout info" style="margin-bottom:12px"><span><b>Une feuille recto verso au lieu de l'accueil complet.</b> Recto : identité, ce qui a changé, les 3 risques majeurs du poste. Verso : points rappelés, EPI, questions, signatures de l'intérimaire et du responsable de l'accueil. Remplissez et signez ici, ou imprimez la fiche, faites-la signer à la main, puis basculez le scan ici.</span></div>
+`; }
+function reacHisto(L){ return `  <p class="sec-h">Réaccueils enregistrés</p>
+  ${L.length?`<div class="tbl"><table><thead><tr><th>Date</th><th>Intérimaire</th><th>Poste et lieu</th><th>Interruption</th><th>Responsable</th><th></th></tr></thead><tbody>
+  ${L.map(x=>`<tr><td>${fmt(x.date?x.date+"T12:00:00":"")}</td><td><b>${esc(fullName(x))}</b>${x.agence?`<br><span class="hint">${esc(x.agence)}</span>`:""}</td><td>${esc(POSTES[x.poste]||"")}<br><span class="hint">${esc(reacLieu(x))}</span></td><td>${esc(dureeTxt(x.derniereMission,x.date)||"—")}</td><td>${esc(x.resp||"")}${x.papier?` <span class="chip">papier</span>`:""}</td><td style="white-space:nowrap">${S.confirmReac===x.id?`<button class="btn danger small" data-rdel="${x.id}">Supprimer</button> <button class="btn ghost small" data-ract="noDelR">Annuler</button>`:`<button class="btn ghost small" data-rpdf="${x.id}">PDF</button> <button class="btn ghost small" data-rask="${x.id}" title="Supprimer">✕</button>`}</td></tr>`).join("")}
+  </tbody></table></div>`:`<div class="empty"><b>Aucun réaccueil enregistré.</b><span>Les fiches signées ici ou basculées depuis le papier sont gardées dans cette liste et dans le dossier de l'arrivant.</span></div>`}`; }
+function vReacPapier(r,ident,M){
+  const F=S.reacFiles||[];
+  return `<div class="panel tform">
+    <p class="hint" style="margin:0">La fiche a été remplie et signée sur papier ? Renseignez l'intérimaire, déposez le scan ou les photos du recto et du verso : la fiche est archivée ici et dans son dossier.</p>
+    ${ident}
+    ${M!=null&&M>=12?`<div class="callout warn"><span><b>Plus d'un an d'interruption.</b> Vérifiez que rien n'a trop changé pour lui ou elle. En cas de doute, faites-lui refaire l'accueil complet.</span></div>`:""}
+    <div class="grid2"><div class="field"><label>Responsable de l'accueil</label><input data-rf="resp" value="${esc(r.resp||"")}" placeholder="Prénom Nom"></div><div class="field"><label>Fonction</label><input data-rf="fonction" value="${esc(r.fonction||"")}" placeholder="Chef d'équipe, SSE…"></div></div>
+    <div class="field"><label for="rscan">Fiche signée : scan PDF ou photos du recto et du verso</label><input id="rscan" type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png" multiple><span class="hint">Vous pouvez choisir plusieurs fichiers en une fois (recto puis verso), ou en ajouter un deuxième ensuite.</span></div>
+    ${F.length?`<div style="display:grid;gap:6px">${F.map((f,i)=>`<div class="trow"><span>${i+1}. ${esc(f.name)} <span class="hint">· ${f.type==="application/pdf"?"PDF":"photo"} · ${Math.max(1,Math.round(f.bytes.byteLength/1024))} Ko</span></span><button class="btn ghost small" data-rfdel="${i}">Retirer</button></div>`).join("")}</div>`:""}
+    <label class="tcheck"><input type="checkbox" data-rsigned ${r.signedPaper?"checked":""}> La fiche est complète et signée par l'intérimaire et par le responsable de l'accueil</label>
+    <p class="err" id="rerr" style="margin:0;color:var(--bad)"></p>
+    <div><button class="btn good" data-ract="bascule">Basculer le réaccueil</button></div>
+  </div>`;
+}
+/* Assemble les fichiers déposés (PDF et photos) en un seul PDF A4 léger */
+async function reacScanPdf(files){
+  const {PDFDocument}=PDFLib;
+  if(files.length===1&&files[0].type==="application/pdf") return new Uint8Array(files[0].bytes);
+  const out=await PDFDocument.create(), W=595.28, H=841.89, m=18;
+  for(const f of files){
+    if(f.type==="application/pdf"){ const src=await PDFDocument.load(f.bytes.slice(0),{ignoreEncryption:true}); (await out.copyPages(src,src.getPageIndices())).forEach(pg=>out.addPage(pg)); continue; }
+    const jpg=await new Promise((ok,ko)=>{ const u=URL.createObjectURL(new Blob([f.bytes],{type:f.type})), im=new Image(); im.onload=()=>{ const k=Math.min(1,1800/Math.max(im.width,im.height)), c=document.createElement("canvas"); c.width=Math.round(im.width*k); c.height=Math.round(im.height*k); const x=c.getContext("2d"); x.fillStyle="#fff"; x.fillRect(0,0,c.width,c.height); x.drawImage(im,0,0,c.width,c.height); URL.revokeObjectURL(u); c.toBlob(b=>b?b.arrayBuffer().then(ok):ko(new Error("img")),"image/jpeg",.82); }; im.onerror=()=>{ URL.revokeObjectURL(u); ko(new Error("img")); }; im.src=u; });
+    const im=await out.embedJpg(jpg), land=im.width>im.height, pw=land?H:W, ph=land?W:H, k=Math.min((pw-2*m)/im.width,(ph-2*m)/im.height);
+    out.addPage([pw,ph]).drawImage(im,{x:(pw-im.width*k)/2,y:(ph-im.height*k)/2,width:im.width*k,height:im.height*k});
+  }
+  return await out.save();
+}
+async function reacOpen(x){
+  if(x.hasScan){ const b=await (await api("reaccueils/"+encodeURIComponent(x.id)+"/scan")).arrayBuffer(); download(new Blob([b],{type:"application/pdf"}),`Reaccueil_papier_${x.nom}_${x.prenom}_${x.date||""}.pdf`); return; }
+  await reacDownload(x,!!(x.sigInterim&&x.sigResp));
+}
 function vReac(){
   const r=S.reac||(S.reac=reacDraft()), top=reacTop3(r), M=monthsBetween(r.derniereMission,r.date);
   const L=(S.reaccueils||[]).slice().sort((a,b)=>(b.date||"").localeCompare(a.date||"")||(b.createdAt||"").localeCompare(a.createdAt||""));
   const doss=S.dossiers.slice().sort((a,b)=>(isInterim(b)-isInterim(a))||fullName(a).localeCompare(fullName(b)));
-  const nPts=R_KEYS.filter(k=>r.points[k]).length;
-  return `<div class="head"><div><p class="eyebrow">Intérimaire déjà accueilli, de retour après une interruption</p><h2>Réaccueil intérimaire</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-ract="blank">Fiche vierge à imprimer (PDF)</button>${r.id||r.nom?`<button class="btn ghost" data-ract="new">Nouveau réaccueil</button>`:""}</div></div>
-  <div class="callout info" style="margin-bottom:12px"><span><b>Une feuille recto verso au lieu de l'accueil complet.</b> Recto : identité, ce qui a changé, les 3 risques majeurs du poste. Verso : points rappelés, EPI, questions, signatures de l'intérimaire et du responsable de l'accueil. Remplissez et signez ici, ou imprimez la fiche et faites-la signer à la main.</span></div>
-  <div class="panel tform">
-    <div class="field"><label>Intérimaire déjà accueilli (facultatif)</label><select data-rpick><option value="">— Choisir un arrivant pour préremplir —</option>${doss.map(d=>`<option value="${d.id}" ${r.dossierId===d.id?"selected":""}>${esc(fullName(d))} · ${esc(d.posteLabel||"")}${d.statut?" · "+esc(d.statut):""}</option>`).join("")}</select><span class="hint">Ou saisissez directement ses informations ci-dessous.</span></div>
+  const nPts=R_KEYS.filter(k=>r.points[k]).length, papier=S.reacMode==="papier";
+  const ident=`    <div class="field"><label>Intérimaire déjà accueilli (facultatif)</label><select data-rpick><option value="">— Choisir un arrivant pour préremplir —</option>${doss.map(d=>`<option value="${d.id}" ${r.dossierId===d.id?"selected":""}>${esc(fullName(d))} · ${esc(d.posteLabel||"")}${d.statut?" · "+esc(d.statut):""}</option>`).join("")}</select><span class="hint">Ou saisissez directement ses informations ci-dessous.</span></div>
     <div class="grid2">
       ${[["prenom","Prénom"],["nom","Nom"],["agence","Agence d'intérim"]].map(([k,l])=>`<div class="field"><label>${l}</label><input data-rf="${k}" value="${esc(r[k]||"")}"></div>`).join("")}
       <div class="field"><label>Poste</label><select data-rf="poste"><option value="">— Choisir —</option>${Object.entries(POSTES).map(([k,l])=>`<option value="${k}" ${r.poste===k?"selected":""}>${l}</option>`).join("")}</select></div>
@@ -705,7 +740,12 @@ function vReac(){
       <div class="field"><label>Accueil sécurité complet suivi le</label><input type="date" data-rf="accueilInitial" value="${esc(r.accueilInitial||"")}"></div>
       <div class="field"><label>Durée de l'interruption</label><input value="${esc(dureeTxt(r.derniereMission,r.date)||"—")}" disabled></div>
     </div>
-    ${M!=null&&M>=12?`<div class="callout warn"><span><b>Plus d'un an d'interruption.</b> Vérifiez que rien n'a trop changé pour lui ou elle. En cas de doute, faites-lui refaire l'accueil complet.</span></div>`:""}
+`;
+  const modes=`<div class="seg" style="margin-bottom:12px">${[["ecran","Remplir et signer à l'écran"],["papier","Basculer une fiche signée à la main"]].map(([k,l])=>`<button data-rmode="${k}" aria-pressed="${(papier?"papier":"ecran")===k}">${l}</button>`).join("")}</div>`;
+  if(papier) return reacHead(r)+modes+vReacPapier(r,ident,M)+reacHisto(L);
+  return reacHead(r)+modes+`
+  <div class="panel tform">
+${ident}    ${M!=null&&M>=12?`<div class="callout warn"><span><b>Plus d'un an d'interruption.</b> Vérifiez que rien n'a trop changé pour lui ou elle. En cas de doute, faites-lui refaire l'accueil complet.</span></div>`:""}
     <div class="callout warn" style="background:var(--surface-2);color:var(--ink)"><span>Nouveau poste ou nouveau site client : le réaccueil ne suffit pas, l'accueil sécurité complet est à refaire.</span></div>
     <fieldset><legend>1. Ce qui a changé depuis sa dernière mission</legend><textarea data-rf="nouveautes" placeholder="Nouvelles règles, nouveaux équipements, organisation, consignes du client, retours d'accidents…">${esc(r.nouveautes||"")}</textarea></fieldset>
     <fieldset><legend>2. Les 3 risques majeurs du poste</legend>${top.length?top.map(([k,rk],i)=>`<label class="tcheck" style="padding:6px 0;border-bottom:1px solid var(--line);align-items:flex-start"><input type="checkbox" data-rrisk="${k}" ${r.risquesOk[k]?"checked":""} style="margin-top:4px"><span><b>${i+1}. ${esc(rk.t)}</b><br><span class="hint">${esc(rk.c.join(" "))} <span style="color:var(--bad)">STOP si : ${esc(rk.stop)}</span></span></span></label>`).join(""):`<p class="hint" style="margin:0">Choisissez le poste pour afficher ses 3 risques majeurs.</p>`}</fieldset>
@@ -721,10 +761,7 @@ function vReac(){
     <p class="err" id="rerr" style="margin:0;color:var(--bad)"></p>
     <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn good" data-ract="save">Enregistrer et télécharger la fiche signée</button><button class="btn ghost" data-ract="print">Télécharger pour imprimer et signer à la main</button></div>
   </div>
-  <p class="sec-h">Réaccueils enregistrés</p>
-  ${L.length?`<div class="tbl"><table><thead><tr><th>Date</th><th>Intérimaire</th><th>Poste et lieu</th><th>Interruption</th><th>Responsable</th><th></th></tr></thead><tbody>
-  ${L.map(x=>`<tr><td>${fmt(x.date?x.date+"T12:00:00":"")}</td><td><b>${esc(fullName(x))}</b>${x.agence?`<br><span class="hint">${esc(x.agence)}</span>`:""}</td><td>${esc(POSTES[x.poste]||"")}<br><span class="hint">${esc(reacLieu(x))}</span></td><td>${esc(dureeTxt(x.derniereMission,x.date)||"—")}</td><td>${esc(x.resp||"")}</td><td style="white-space:nowrap">${S.confirmReac===x.id?`<button class="btn danger small" data-rdel="${x.id}">Supprimer</button> <button class="btn ghost small" data-ract="noDelR">Annuler</button>`:`<button class="btn ghost small" data-rpdf="${x.id}">PDF</button> <button class="btn ghost small" data-rask="${x.id}" title="Supprimer">✕</button>`}</td></tr>`).join("")}
-  </tbody></table></div>`:`<div class="empty"><b>Aucun réaccueil enregistré.</b><span>Les fiches signées ici sont gardées dans cette liste et dans le dossier de l'arrivant.</span></div>`}`;
+`+reacHisto(L);
 }
 function setupRSig(){
   document.querySelectorAll("canvas[data-rsig]").forEach(c=>{ const key=c.dataset.rsig;
@@ -741,16 +778,31 @@ function reacRender(){ const sx=window.scrollY; render(); window.scrollTo({top:s
 async function saveReac(r){ const j=await (await api("reaccueils/"+encodeURIComponent(r.id),{method:"PUT",body:JSON.stringify(r)})).json(); const i=(S.reaccueils||[]).findIndex(x=>x.id===r.id); if(i<0) S.reaccueils.push(r); else S.reaccueils[i]=r; return j; }
 document.addEventListener("click",async e=>{
   const t=e.target.closest("button"); if(!t) return;
-  if(t.dataset.rpdfd){ const x=(S.reaccueils||[]).find(y=>y.id===t.dataset.rpdfd); if(x) try{ await reacDownload(x,!!(x.sigInterim&&x.sigResp)); }catch(err){ console.error(err); toast("La fiche n'a pas pu être générée."); } return; }
+  if(t.dataset.rpdfd){ const x=(S.reaccueils||[]).find(y=>y.id===t.dataset.rpdfd); if(x) try{ await reacOpen(x); }catch(err){ console.error(err); toast("La fiche n'a pas pu être générée."); } return; }
   if(S.tab!=="reac"||!S.reac) return;
   const r=S.reac;
+  if(t.dataset.rmode){ S.reacMode=t.dataset.rmode; reacRender(); return; }
+  if(t.dataset.rfdel){ S.reacFiles.splice(+t.dataset.rfdel,1); reacRender(); return; }
   if(t.dataset.rsigclear){ r[t.dataset.rsigclear]=null; reacRender(); return; }
-  if(t.dataset.rpdf){ const x=(S.reaccueils||[]).find(y=>y.id===t.dataset.rpdf); if(x) try{ await reacDownload(x,!!(x.sigInterim&&x.sigResp)); }catch(err){ console.error(err); toast("La fiche n'a pas pu être générée."); } return; }
+  if(t.dataset.rpdf){ const x=(S.reaccueils||[]).find(y=>y.id===t.dataset.rpdf); if(x) try{ await reacOpen(x); }catch(err){ console.error(err); toast("La fiche n'a pas pu être générée."); } return; }
   if(t.dataset.rask){ S.confirmReac=t.dataset.rask; reacRender(); return; }
   if(t.dataset.rdel){ try{ await api("reaccueils/"+encodeURIComponent(t.dataset.rdel),{method:"DELETE"}); S.reaccueils=S.reaccueils.filter(x=>x.id!==t.dataset.rdel); toast("Réaccueil supprimé."); }catch(_){ toast("La suppression a échoué."); } S.confirmReac=null; reacRender(); return; }
   const a=t.dataset.ract; if(!a) return;
   if(a==="noDelR"){ S.confirmReac=null; reacRender(); return; }
-  if(a==="new"){ S.reac=reacDraft(); render(); window.scrollTo({top:0}); return; }
+  if(a==="bascule"){ const er=$("#rerr"), miss=[], F=S.reacFiles||[];
+    if(!r.prenom||!r.nom) miss.push("le prénom et le nom"); if(!r.poste) miss.push("le poste"); if(!r.date) miss.push("la date du réaccueil"); if(!r.resp) miss.push("le nom du responsable de l'accueil");
+    if(!F.length) miss.push("le scan ou les photos de la fiche"); if(!r.signedPaper) miss.push("la confirmation que la fiche est signée");
+    if(miss.length){ er.textContent="À compléter : "+miss.join(", ")+"."; er.scrollIntoView({block:"center"}); return; }
+    t.disabled=true; t.textContent="Bascule en cours…"; er.textContent="";
+    let pdfB; try{ pdfB=await reacScanPdf(F); }catch(err){ console.error(err); t.disabled=false; t.textContent="Basculer le réaccueil"; er.textContent="Un des fichiers n'a pas pu être lu. Utilisez un PDF ou des photos JPG / PNG (les photos iPhone en HEIC ne passent pas : réglez l'appareil photo sur « Le plus compatible » ou envoyez-les par mail en JPG)."; return; }
+    if(pdfB.byteLength>5.5*1024*1024){ t.disabled=false; t.textContent="Basculer le réaccueil"; er.textContent=`Le scan fait ${(pdfB.byteLength/1048576).toFixed(1)} Mo : 5,5 Mo maximum. Scannez en qualité standard ou envoyez des photos.`; return; }
+    const rec=JSON.parse(JSON.stringify(r)); rec.papier=true; rec.hasScan=true; rec.sigInterim=null; rec.sigResp=null; rec.points={}; rec.risquesOk={}; rec.epi=[]; rec.scanName=F.map(f=>f.name).join(", ");
+    rec.id=("r-"+r.nom+"-"+r.prenom+"-"+r.date).toLowerCase().normalize("NFD").replace(/[^\w-]+/g,"").slice(0,60)+"-"+tok().slice(0,6); rec.createdAt=new Date().toISOString();
+    try{ await api("reaccueils/"+encodeURIComponent(rec.id)+"/scan",{method:"PUT",headers:{"content-type":"application/pdf"},body:pdfB}); await saveReac(rec);
+      toast("Réaccueil basculé."); S.reac=reacDraft(); S.reacFiles=[]; render(); window.scrollTo({top:0}); }
+    catch(err){ t.disabled=false; t.textContent="Basculer le réaccueil"; er.textContent=err.code==="auth"?"Session expirée : reconnectez-vous puis recommencez.":"La bascule a échoué. Réessayez."; }
+    return; }
+  if(a==="new"){ S.reac=reacDraft(); S.reacFiles=[]; render(); window.scrollTo({top:0}); return; }
   if(a==="blank"){ try{ await reacDownload(reacDraft({resp:"",fonction:"",date:"",lieu:""}),false); toast("Fiche vierge téléchargée : imprimez-la en recto verso."); }catch(err){ console.error(err); toast("La fiche n'a pas pu être générée."); } return; }
   if(a==="allPts"){ const all=R_KEYS.every(k=>r.points[k]); R_KEYS.forEach(k=>r.points[k]=!all); reacRender(); return; }
   if(a==="print"){ try{ await reacDownload(r,false); toast("Fiche préremplie téléchargée : imprimez-la en recto verso."); }catch(err){ console.error(err); toast("La fiche n'a pas pu être générée."); } return; }
@@ -770,6 +822,8 @@ const top3Missing = r=>{ const t=reacTop3(r); return !t.length || t.some(([k])=>
 document.addEventListener("change",e=>{
   if(S.tab!=="reac"||!S.reac) return; const el=e.target, r=S.reac;
   if(el.dataset.rpick!==undefined){ const d=S.dossiers.find(x=>x.id===el.value); if(d){ const keep={resp:r.resp,fonction:r.fonction,date:r.date}; S.reac={...reacFromDossier(d),...keep}; reacRender(); } return; }
+  if(el.id==="rscan"){ const L=[...el.files]; Promise.all(L.map(f=>f.arrayBuffer().then(b=>({name:f.name,type:/pdf$/i.test(f.type)||/\.pdf$/i.test(f.name)?"application/pdf":(f.type||"image/jpeg"),bytes:b})))).then(A=>{ S.reacFiles=[...(S.reacFiles||[]),...A]; reacRender(); }); return; }
+  if(el.dataset.rsigned!==undefined){ r.signedPaper=el.checked; return; }
   if(el.dataset.rrisk){ r.risquesOk[el.dataset.rrisk]=el.checked; return; }
   if(el.dataset.rpt){ r.points[el.dataset.rpt]=el.checked; reacRender(); return; }
   if(el.dataset.repi){ const v=el.dataset.repi; r.epi=r.epi.filter(x=>x!==v); if(el.checked) r.epi.push(v); return; }

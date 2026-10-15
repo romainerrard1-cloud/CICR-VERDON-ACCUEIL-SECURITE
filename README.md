@@ -4,7 +4,7 @@ Site publié sur Netlify, mis à jour automatiquement à chaque modification de 
 
 - `/` : accueil sécurité interactif (arrivants, intérimaires).
 - `/q.html` : questionnaires de suivi (1 mois arrivant, 1 mois parrain, 3 mois).
-- `/sse/` : espace SSE, protégé par code d'accès. Onglet « Réaccueil intérimaire » : fiche recto verso (PDF) avec double signature pour un intérimaire déjà accueilli qui revient après une interruption.
+- `/sse/` : espace SSE, protégé par code d'accès. Onglet « Réaccueil intérimaire » : fiche recto verso (PDF) avec double signature pour un intérimaire déjà accueilli qui revient après une interruption, signée à l'écran ou basculée depuis le papier (scan ou photos archivés).
 - `netlify/functions/api.mts` : enregistrement des accueils, dossiers et réponses (Netlify Blobs), y compris les réaccueils.
 
 Variables d'environnement Netlify : `SSE_PASSWORD` (code de l'espace SSE), `SSE_SECRET` (clé de session), `BREVO_API_KEY` (envoi automatique des mails), `MAIL_FROM` (expéditeur validé dans Brevo, par défaut rerrard@groupe-verdon.com).

@@ -166,7 +166,22 @@ export default async (req: Request, _context: Context) => {
       }
     }
 
-    if (p[0] === "reaccueils" && p[1] && safeId(p[1])) {
+    if (p[0] === "reaccueils" && p[1] && safeId(p[1]) && p[2] === "scan") {
+      if (m === "PUT") {
+        const buf = await req.arrayBuffer();
+        if (buf.byteLength > 6 * 1024 * 1024) return json({ error: "trop lourd" }, 413);
+        if (new TextDecoder().decode(buf.slice(0, 5)) !== "%PDF-") return json({ error: "pdf" }, 400);
+        await st.set("reacscan/" + p[1], buf);
+        return json({ ok: true });
+      }
+      if (m === "GET") {
+        const buf = await st.get("reacscan/" + p[1], { type: "arrayBuffer" });
+        if (!buf) return json({ error: "scan" }, 404);
+        return new Response(buf, { headers: { "content-type": "application/pdf", "cache-control": "no-store" } });
+      }
+    }
+
+    if (p[0] === "reaccueils" && p[1] && safeId(p[1]) && !p[2]) {
       if (m === "PUT") {
         const raw = await req.text();
         if (raw.length > 1500000) return json({ error: "trop lourd" }, 413);
@@ -176,7 +191,7 @@ export default async (req: Request, _context: Context) => {
         await st.setJSON("reaccueils/" + p[1], r);
         return json({ ok: true });
       }
-      if (m === "DELETE") { await st.delete("reaccueils/" + p[1]); return json({ ok: true }); }
+      if (m === "DELETE") { await st.delete("reaccueils/" + p[1]); await st.delete("reacscan/" + p[1]); return json({ ok: true }); }
     }
 
     if (p[0] === "recus" && p[1] && safeId(p[1])) {
