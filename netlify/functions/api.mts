@@ -102,7 +102,7 @@ export default async (req: Request, _context: Context) => {
     if (p[0] === "parrain" && m === "GET") {
       /* public : le nom et la raison du parrain proposé, sans son mail */
       const stored = await st.get("config/parrains", { type: "json" }) as any;
-      const list = (stored?.seeded >= 2) ? stored.list : mergeDefaults(stored?.list || []);
+      const list = (stored?.seeded >= 3) ? stored.list : mergeDefaults(stored?.list || []);
       const q = url.searchParams;
       const pa = pickParrain(list, { poste: q.get("poste") || "", client: q.get("client") || "", lieux: (q.get("lieux") || "").split("|").filter(Boolean) });
       return json(pa ? { nom: pa.nom, role: pa.role || "", pourquoi: pa.pourquoi || "" } : {});
@@ -113,7 +113,7 @@ export default async (req: Request, _context: Context) => {
 
     if (p[0] === "state" && m === "GET") {
       { const cur = await st.get("config/parrains", { type: "json" }) as any;
-        if (!(cur?.seeded >= 2)) await st.setJSON("config/parrains", { list: mergeDefaults(cur?.list || []), seeded: 2 }); }
+        if (!(cur?.seeded >= 3)) await st.setJSON("config/parrains", { list: mergeDefaults(cur?.list || []), seeded: 3 }); }
       const [dossiers, recus, parrains, settings, reaccueils] = await Promise.all([
         listJSON("dossiers/"), listJSON("recus/"),
         st.get("config/parrains", { type: "json" }), st.get("config/settings", { type: "json" }), listJSON("reaccueils/"),
@@ -209,7 +209,7 @@ export default async (req: Request, _context: Context) => {
 
     if (p[0] === "config" && (p[1] === "parrains" || p[1] === "settings") && m === "PUT") {
       const body = await req.json();
-      if (p[1] === "parrains") body.seeded = 2;
+      if (p[1] === "parrains") body.seeded = 3;
       await st.setJSON("config/" + p[1], body);
       return json({ ok: true });
     }
