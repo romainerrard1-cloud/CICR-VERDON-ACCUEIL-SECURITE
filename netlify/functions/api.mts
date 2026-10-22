@@ -114,6 +114,23 @@ export default async (req: Request, _context: Context) => {
     if (p[0] === "state" && m === "GET") {
       { const cur = await st.get("config/parrains", { type: "json" }) as any;
         if (!(cur?.seeded >= 3)) await st.setJSON("config/parrains", { list: mergeDefaults(cur?.list || []), seeded: 3 }); }
+      /* une fois : dossiers d'accueil papier demandés par le service SSE (22/10/2026) */
+      if (!(await st.get("seed/papier-2026-10-22"))) {
+        const cfg = await st.get("config/parrains", { type: "json" }) as any;
+        const bb = (cfg?.list || []).find((x: any) => /bassine/i.test(x.nom || ""));
+        const now = new Date().toISOString(), today = now.slice(0, 10);
+        for (const [prenom, nom] of [["Philippe", "LEWESKY"], ["Joël", "À COMPLÉTER"]]) {
+          const id = ("papier-" + nom + "-" + prenom).toLowerCase().normalize("NFD").replace(/[^\w-]+/g, "").slice(0, 50) + "-" + rid().slice(0, 6);
+          const d: any = { id, nom, prenom, emailPerso: "", statut: "Intérimaire", agence: "", poste: "soudeur", posteLabel: "Soudeur", date: today, lieux: ["Atelier de Cambronne"], client: "", chantier: "", quiz: null, rq: null, risques: [], prat: [], formations: [],
+            accueilPapier: true, validated: "Accueil papier", validatedAt: now, createdAt: now, notes: "", finMission: today,
+            parrain: bb ? { nom: bb.nom, email: bb.email || "BBassine@groupe-verdon.com", pourquoi: bb.pourquoi || "", crit_entreprise: !!bb.crit_entreprise, crit_technique: !!bb.crit_technique, crit_sse: !!bb.crit_sse, crit_pedago: !!bb.crit_pedago } : { nom: "Brahim Bassine", email: "BBassine@groupe-verdon.com", pourquoi: "" },
+            terrain: { skipped: true, motif: "Accueil au poste fait sur papier", doneAt: now },
+            steps: { mailArrivant: { sentAt: now, papier: true }, mailParrain: { sentAt: now, papier: true }, ack: { token: rid() + rid() }, q1m: { token: rid() + rid() }, p1m: { token: rid() + rid() }, q3m: { token: rid() + rid() } } };
+          for (const k of FORMS) await st.setJSON("tok/" + d.steps[k].token, { id, k });
+          await st.setJSON("dossiers/" + id, d);
+        }
+        await st.setJSON("seed/papier-2026-10-22", { at: now });
+      }
       const [dossiers, recus, parrains, settings, reaccueils] = await Promise.all([
         listJSON("dossiers/"), listJSON("recus/"),
         st.get("config/parrains", { type: "json" }), st.get("config/settings", { type: "json" }), listJSON("reaccueils/"),
