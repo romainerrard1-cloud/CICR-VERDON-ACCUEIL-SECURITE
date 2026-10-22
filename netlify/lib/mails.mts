@@ -5,8 +5,8 @@ export type Step = { k: string; l: string; d: number; to: "arrivant" | "parrain"
 export const STEPS: Step[] = [
   { k: "mailArrivant", l: "Mail de bienvenue à l'arrivant", d: 0, to: "arrivant" },
   { k: "mailParrain", l: "Mail au parrain tuteur", d: 0, to: "parrain" },
-  { k: "q1m", l: "Questionnaire arrivant à 1 mois", d: 30, to: "arrivant", form: true },
-  { k: "p1m", l: "Évaluation par le parrain à 1 mois", d: 30, to: "parrain", form: true },
+  { k: "q1m", l: "Bilan de l'arrivant", d: 30, to: "arrivant", form: true },
+  { k: "p1m", l: "Bilan par le parrain", d: 30, to: "parrain", form: true },
   { k: "q3m", l: "Expérience à 3 mois (étoiles + avis Google)", d: 90, to: "arrivant", form: true },
 ];
 
@@ -59,7 +59,7 @@ export function mailFor(d: any, k: string, settings: any): Mail | null {
     `Votre arrivée : le ${fmt(d.date)}, ${lieu}. Présentez-vous à 7h30 avec vos EPI.`,
     "La partie pratique de votre accueil renforcé se fera sur le terrain, avec votre chef d'équipe.",
     "En cas de question :", contacts,
-    "Dans un mois, vous recevrez un court questionnaire pour noter votre accueil et votre parrain tuteur.",
+    "Dans un mois, ou à la fin de votre mission, vous recevrez un court bilan pour noter votre accueil et votre parrain tuteur.",
     "Bonne mission,", sign,
   ] };
 
@@ -77,21 +77,21 @@ export function mailFor(d: any, k: string, settings: any): Mail | null {
     ] },
     "Merci de confirmer en un clic que vous avez pris connaissance de vos missions :",
     { button: ["Je confirme mes missions de parrain", qLink(d, "ack", settings)] },
-    `Dans un mois (ou à la fin de sa mission si elle est plus courte), un petit questionnaire vous sera envoyé afin d'évaluer ${fullName(d)}.`,
+    `Dans un mois, ou à la fin de sa mission si elle est plus courte, un court bilan vous sera envoyé pour évaluer ${fullName(d)}.`,
     "Merci pour votre engagement,", sign,
   ] };
 
-  if (k === "q1m") return { to: d.emailPerso, toName: fullName(d), subject: d.finMission ? "Votre mission chez CICR Verdon : notez votre accueil" : "Votre premier mois chez CICR Verdon : notez votre accueil", blocks: [
+  if (k === "q1m") return { to: d.emailPerso, toName: fullName(d), subject: "Bilan de votre passage chez CICR Verdon", blocks: [
     `Bonjour ${d.prenom},`,
-    d.finMission ? "Votre mission chez CICR Verdon se termine : merci pour votre travail. Notez en 2 minutes votre accueil, la sécurité et votre parrain tuteur : votre avis nous aide à nous améliorer." : "Cela fait un mois que vous nous avez rejoints. Notez en 2 minutes votre accueil, la sécurité et votre parrain tuteur : votre avis nous aide à nous améliorer.",
-    { button: ["Répondre au questionnaire", qLink(d, "q1m", settings)] },
+    `${d.finMission ? "Votre mission chez CICR Verdon se termine : merci pour votre travail. " : ""}Faites en 2 minutes le bilan de votre passage chez nous : votre accueil, la sécurité et votre parrain tuteur. Votre avis nous aide à nous améliorer.`,
+    { button: ["Faire mon bilan", qLink(d, "q1m", settings)] },
     "Merci !", sign,
   ] };
 
-  if (k === "p1m") return { to: pa.email, toName: pa.nom, subject: d.finMission ? `Évaluation de fin de mission de ${fullName(d)}` : `Évaluation à 1 mois de ${fullName(d)}`, blocks: [
+  if (k === "p1m") return { to: pa.email, toName: pa.nom, subject: `Bilan de passage de ${fullName(d)}`, blocks: [
     `Bonjour ${first(pa.nom)},`,
-    `${d.finMission ? `La mission de ${fullName(d)} se termine.` : `Cela fait un mois que vous accompagnez ${fullName(d)}.`} Merci de noter ses premières semaines (sécurité, risques majeurs, EPI, gestes du métier, autonomie…) et de nous dire si la période d'accompagnement peut se terminer.`,
-    { button: ["Évaluer en 2 minutes", qLink(d, "p1m", settings)] },
+    `Vous avez accompagné ${fullName(d)} en tant que parrain tuteur. Merci de faire le bilan de son passage chez CICR Verdon (sécurité, risques majeurs, EPI, gestes du métier, autonomie…) et de le confirmer en signant.`,
+    { button: ["Faire le bilan en 2 minutes", qLink(d, "p1m", settings)] },
     "Merci !", sign,
   ] };
 

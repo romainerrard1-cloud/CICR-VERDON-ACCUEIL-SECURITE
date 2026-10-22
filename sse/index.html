@@ -121,11 +121,11 @@ const STEPS = [
   {k:"mailParrain", l:"Mail au parrain tuteur", d:0, to:"parrain"},
   {k:"ack", l:"Missions confirmées par le parrain", d:0, to:"parrain", form:true, nomail:true},
   {k:"terrain", l:"Accueil au poste, avec l'arrivant", d:0, to:"arrivant", local:true},
-  {k:"q1m", l:"Questionnaire arrivant à 1 mois", d:30, to:"arrivant", form:true},
-  {k:"p1m", l:"Évaluation par le parrain à 1 mois", d:30, to:"parrain", form:true},
+  {k:"q1m", l:"Bilan de l'arrivant (1 mois ou fin de mission)", d:30, to:"arrivant", form:true},
+  {k:"p1m", l:"Bilan par le parrain (1 mois ou fin de mission)", d:30, to:"parrain", form:true},
   {k:"q3m", l:"Expérience à 3 mois (étoiles + avis Google)", d:90, to:"arrivant", form:true}
 ];
-const LABELS = {accueil:"Accueil sécurité",consignes:"Consignes claires",parrain:"Accompagnement du parrain",epi:"EPI dès le 1er jour",securite:"Se sent en sécurité",danger:"Situation dangereuse non traitée",danger_detail:"Détail",commentaire:"Commentaire",c_securite:"Respect des consignes SSE",c_risques:"Maîtrise des 3 risques majeurs",c_epi:"Port des EPI",c_gestes:"Gestes du métier",c_autonomie:"Autonomie",c_qualite:"Qualité du travail",c_ponctualite:"Ponctualité, disponibilité, présentation",c_hierarchie:"Rapport avec la hiérarchie",signataire:"Signé par",c_equipe:"Intégration dans l'équipe",c_vigilance:"Vigilance et remontées",fin_parrainage:"Fin de parrainage",experience:"Expérience chez Verdon",recommande:"Recommanderait CICR Verdon"};
+const LABELS = {accueil:"Accueil sécurité",consignes:"Consignes claires",parrain:"Accompagnement du parrain",epi:"EPI dès le 1er jour",securite:"Se sent en sécurité",danger:"Situation dangereuse non traitée",danger_detail:"Détail",commentaire:"Commentaire",c_securite:"Respect des consignes SSE",c_risques:"Maîtrise des 3 risques majeurs",c_epi:"Port des EPI",c_gestes:"Gestes du métier",c_autonomie:"Autonomie",c_qualite:"Qualité du travail",c_ponctualite:"Ponctualité, disponibilité, présentation",c_hierarchie:"Rapport avec la hiérarchie",signataire:"Signé par",c_equipe:"Intégration dans l'équipe",c_vigilance:"Vigilance et remontées",fin_parrainage:"Confirmation finale",experience:"Expérience chez Verdon",recommande:"Recommanderait CICR Verdon"};
 const CRIT = [["crit_entreprise","Connaissance de l'entreprise"],["crit_technique","Compétences techniques"],["crit_sse","Sensibilité SSE, adhère à nos exigences"],["crit_pedago","Aptitudes pédagogiques"]];
 const critOf = p => { const o={}; CRIT.forEach(([k])=>{ if(p&&p[k]) o[k]=true; }); return o; };
 const critHtml = p => `<div class="crits">${CRIT.map(([k,l])=>`<span class="chip ${p&&p[k]?"ok":"late"}">${p&&p[k]?"✓":"✗"} ${l}</span>`).join("")}</div>`;
@@ -163,6 +163,7 @@ function tasks(){
   S.dossiers.forEach(d=>{
     if(d.archived) return;
     if(!d.parrain?.nom) out.push({d, k:"parrain", cls:"t-late", when:"Maintenant", l:"Désigner le parrain tuteur", sub:`${fullName(d)} · ${d.posteLabel||""}`});
+    ["p1m","q1m","q3m"].forEach(k=>{ const s=(d.steps||{})[k]||{}; if(s.doneAt && !s.seenAt) out.push({d, k:"seen", cls:"t-now", when:"Reçu", date:new Date(s.doneAt), l:"Bilan reçu : "+(STEPS.find(x=>x.k===k)||{}).l.replace(/ \(.*\)$/,""), sub:`${fullName(d)} · ${d.posteLabel||""}`}); });
     STEPS.forEach(st=>{ const r=stepState(d,st);
       if(st.nomail) return;
       if(st.local){ if(["late","now","soon"].includes(r.state)) out.push({d, k:"terrain", cls:r.state==="late"?"t-late":r.state==="now"?"t-now":"t-soon", when:r.state==="late"?"En retard":r.state==="now"?"Aujourd'hui":`Dans ${r.diff} j`, date:r.due, l:(d.finMission&&/1m$/.test(st.k)?st.l.replace("à 1 mois","de fin de mission"):st.l), sub:`${fullName(d)} · à remplir ici avec lui ou elle`}); return; }
@@ -201,7 +202,7 @@ async function ficheInto(pdf,d){
   pg.drawText(T("CICR VERDON · FICHE DE SUIVI D'INTÉGRATION"),{x:mm(16),y,size:8.5,font:fb,color:grey}); y-=mm(7);
   h1(fullName(d)); pg.drawText(T(`${d.posteLabel||""} · ${d.statut||""}${d.agence?" · agence "+d.agence:""}`),{x:mm(16),y,size:10,font:f,color:grey}); y-=mm(6);
   sec("1. Arrivant (MASE 2.1)"); kv("Mail personnel",d.emailPerso); kv("Date d'arrivée",fmt(d.date?d.date+"T12:00:00":"")); kv("Lieu",[...(d.lieux||[]),d.chantier].filter(Boolean).join(", ")||"-");
-  sec("2. Accueil sécurité santé environnement (MASE 2.2.2)"); kv("Validé le",fmt(d.validatedAt)+" · "+(d.validated||"Validé")+" par "+(S.settings.signataire||"")+", "+(S.settings.fonction||"")); kv("Contrôle des connaissances",(d.quiz??"-")+"/15 (minimum 10/15)"+(d.tentatives?" · "+d.tentatives+" tentative(s)":""));
+  sec("2. Accueil sécurité santé environnement (MASE 2.2.2)"); if(d.accueilPapier) kv("Mode","Accueil réalisé sur papier"+(d.hasScan?" (feuille signée jointe au dossier)":" (feuille à joindre)"), d.hasScan?green:red); kv("Validé le",fmt(d.validatedAt)+" · "+(d.validated||"Validé")+" par "+(S.settings.signataire||"")+", "+(S.settings.fonction||"")); kv("Contrôle des connaissances",(d.quiz??"-")+"/15 (minimum 10/15)"+(d.tentatives?" · "+d.tentatives+" tentative(s)":""));
   kv("Accueil renforcé",(d.rq??"-")+"/10 aux questions sur les 3 risques majeurs · partie pratique sur le terrain avec le chef d'équipe"); kv("Risques majeurs du poste",(d.risques||[]).join(", ")||"-");
   sec("3. Parrain tuteur (MASE 2.2.1)"); kv("Parrain désigné",d.parrain?.nom?d.parrain.nom+(d.parrain.email?" · "+d.parrain.email:""):"Non désigné", d.parrain?.nom?null:red); if(d.parrain?.pourquoi) kv("Pourquoi ce parrain",d.parrain.pourquoi);
   CRIT.forEach(([k,l])=>kv(l, d.parrain?.[k]?"Oui":"Non renseigné", d.parrain?.[k]?green:red));
@@ -223,10 +224,10 @@ async function ficheInto(pdf,d){
   if(d.finMission){ sec("Fin de mission"); kv("Date de fin de mission",fmt(d.finMission+"T12:00:00")); }
   sec("4. Suivi et communication"); STEPS.filter(st=>!st.local&&!st.nomail).forEach(st=>{ const s=(d.steps||{})[st.k]||{}; kv(st.l, s.doneAt?"Répondu le "+fmt(s.doneAt)+(s.sentAt?" (envoyé le "+fmt(s.sentAt)+")":""):s.sentAt?"Envoyé le "+fmt(s.sentAt)+(st.form?", en attente de réponse":""):"Non envoyé", s.doneAt||(!st.form&&s.sentAt)?green:null); });
   const block=(k,title)=>{ const s=(d.steps||{})[k]||{}, a=s.answers; sec(title); if(!a){ kv("Statut","Pas encore de réponse"); return; } Object.entries(a).filter(([x,v])=>LABELS[x]&&v!=="").forEach(([x,v])=>kv(LABELS[x], STAR_KEYS.includes(x)?stars(v):v)); kv("Date",fmt(s.doneAt)); return s; };
-  const p1=block("p1m",(d.finMission?"5. Évaluation de fin de mission":"5. Évaluation par le parrain à 1 mois")+" (MASE 2.2.1.9 · 2.3)");
+  const p1=block("p1m","5. Bilan par le parrain (MASE 2.2.1.9 · 2.3)");
   if(p1&&p1.signature){ need(mm(34)); pg.drawText("Signature du parrain",{x:mm(18),y,size:9,font:f,color:grey}); const im=await pdf.embedPng(p1.signature); const w=mm(60), h=w*im.height/im.width; pg.drawRectangle({x:mm(78),y:y-h+mm(3),width:w,height:h,borderColor:rgb(.8,.82,.85),borderWidth:.8}); pg.drawImage(im,{x:mm(78),y:y-h+mm(3),width:w,height:h}); y-=h+mm(4); }
   kv("Fin de parrainage", d.finParrainage?"Actée le "+fmt(d.finParrainage):"Non actée", d.finParrainage?green:red);
-  block("q1m","6. Retour de l'arrivant à 1 mois"); block("q3m","7. Expérience à 3 mois");
+  block("q1m","6. Bilan de l'arrivant"); block("q3m","7. Expérience à 3 mois");
   if(d.notes){ sec("Notes du service SSE"); kv("Notes",d.notes); }
   need(mm(10)); y-=mm(4); pg.drawText(T(`Fiche générée le ${new Date().toLocaleString("fr-FR")} depuis l'espace SSE CICR Verdon.`),{x:mm(16),y,size:8,font:f,color:grey});
 }
@@ -294,7 +295,7 @@ function render(){
 function vTodo(){
   const T=tasks(), act=T.filter(t=>t.cls!=="t-soon"), soon=T.filter(t=>t.cls==="t-soon");
   const row=t=>`<div class="task ${t.cls}"><div class="when"><b>${t.when}</b>${t.date?fmt(t.date):""}</div><div class="what"><b>${t.l}</b><span>${esc(t.sub)}</span></div>
-    <div>${t.recu?`<button class="btn small" data-recu="${t.recu.id}">Traiter</button>`:t.k==="terrain"?`<button class="btn small" data-terrain="${t.d.id}"><span class="dot"></span>Remplir</button>`:t.k==="parrain"?`<button class="btn small" data-open="${t.d.id}">Désigner</button>`:`<button class="btn small" data-mail="${t.d.id}:${t.k}"><span class="dot"></span>Préparer le mail</button>`}</div></div>`;
+    <div>${t.recu?`<button class="btn small" data-recu="${t.recu.id}">Traiter</button>`:t.k==="terrain"?`<button class="btn small" data-terrain="${t.d.id}"><span class="dot"></span>Remplir</button>`:t.k==="seen"?`<button class="btn small" data-seen="${t.d.id}"><span class="dot"></span>Voir le bilan</button>`:t.k==="parrain"?`<button class="btn small" data-open="${t.d.id}">Désigner</button>`:`<button class="btn small" data-mail="${t.d.id}:${t.k}"><span class="dot"></span>Préparer le mail</button>`}</div></div>`;
   return `<div class="head"><div><p class="eyebrow">Tableau de bord</p><h2>À faire</h2></div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn ghost" data-act="fetch" ${S.fetching?"disabled":""}>${S.fetching?"Actualisation…":"Actualiser"}</button></div></div>
     ${S.mailOk?`<div class="callout good" style="margin-bottom:12px"><span><b>Envoi automatique activé.</b> Dès que vous désignez un parrain, l'arrivant et le parrain reçoivent leur mail. Les questionnaires partent seuls à 1 mois et à 3 mois. Seuls les échecs d'envoi apparaissent ici.</span></div>`:`<div class="callout info" style="margin-bottom:12px"><span><b>Vos mails sont prêts à envoyer depuis Outlook.</b> Un point rouge vous prévient dès qu'un mail est à envoyer : bienvenue et parrain dès la désignation, questionnaires à 1 mois, puis à 3 mois. Cliquez sur « Préparer le mail », collez-le dans Outlook, puis « Marquer comme envoyé ».</span></div>`}
@@ -304,11 +305,11 @@ function vTodo(){
     ${soon.length?`<p class="sec-h">Dans les 7 prochains jours</p><div class="tasks">${soon.map(row).join("")}</div>`:""}`;
 }
 function chips(d){
-  return STEPS.map(st=>{ const r=stepState(d,st); const c=r.state==="ok"?"ok":r.state==="late"?"late":["now","soon","wait"].includes(r.state)?"due":""; const short={mailArrivant:"Bienvenue",mailParrain:"Parrain",ack:"Missions",terrain:"Au poste",q1m:"1 mois",p1m:"Bilan parrain",q3m:"3 mois"}[st.k]; return `<span class="chip ${c}">${short}${r.state==="ok"?" ✓":r.state==="wait"?" envoyé":""}</span>`; }).join("");
+  return STEPS.map(st=>{ const r=stepState(d,st); const c=r.state==="ok"?"ok":r.state==="late"?"late":["now","soon","wait"].includes(r.state)?"due":""; const short={mailArrivant:"Bienvenue",mailParrain:"Parrain",ack:"Missions",terrain:"Au poste",q1m:"Bilan arrivant",p1m:"Bilan parrain",q3m:"3 mois"}[st.k]; return `<span class="chip ${c}">${short}${r.state==="ok"?" ✓":r.state==="wait"?" envoyé":""}</span>`; }).join("");
 }
 function vDossiers(){
   const L=[...S.dossiers].sort((a,b)=>(b.date||"").localeCompare(a.date||""));
-  return `<div class="head"><div><p class="eyebrow">${L.length} dossier${L.length>1?"s":""}</p><h2>Arrivants</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-act="exportAll" ${L.length?"":"disabled"}>Tout exporter (PDF)</button><button class="btn" data-tab="import">Basculer une attestation</button></div></div>
+  return `<div class="head"><div><p class="eyebrow">${L.length} dossier${L.length>1?"s":""}</p><h2>Arrivants</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn ghost" data-act="exportAll" ${L.length?"":"disabled"}>Tout exporter (PDF)</button><button class="btn ghost" data-act="papierNew">Ajouter un accueil papier</button><button class="btn" data-tab="import">Basculer une attestation</button></div></div>
   ${!L.length?`<div class="empty"><b>Aucun dossier.</b><span>Les dossiers sont créés quand vous basculez une attestation.</span></div>`:
   `<div class="tbl"><table><thead><tr><th>Arrivant</th><th>Poste</th><th>Statut</th><th>Arrivée</th><th>Parrain tuteur</th><th>Suivi</th></tr></thead><tbody>
   ${L.map(d=>`<tr class="click" data-open="${d.id}"><td><b>${esc(fullName(d))}</b><br><span class="hint">${esc(d.emailPerso||"")}</span></td><td>${esc(d.posteLabel||"")}</td><td>${esc(d.statut||"")}${d.agence?`<br><span class="hint">${esc(d.agence)}</span>`:""}</td><td>${fmt(d.date?d.date+"T12:00:00":"")}</td><td>${d.parrain?.nom?esc(d.parrain.nom):`<span class="chip late">À désigner</span>`}</td><td>${chips(d)}</td></tr>`).join("")}
@@ -402,12 +403,13 @@ function vDetail(d){
       <div><p class="lbl" style="margin-bottom:6px">Parrain tuteur</p><div class="grid2"><div class="field full"><select data-edp>${parrainOptions(d.parrain?.nom)}</select></div>
         <div class="field"><label>Nom</label><input data-edparr="nom" value="${esc(d.parrain?.nom||"")}"></div><div class="field"><label>Mail</label><input data-edparr="email" value="${esc(d.parrain?.email||"")}"></div>
         <div class="field full"><label>Pourquoi ce parrain</label><input data-edparr="pourquoi" value="${esc(d.parrain?.pourquoi||"")}"></div></div>${d.parrain?.nom?critHtml(d.parrain):""}</div>
+      <div class="panel" style="padding:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">${d.accueilPapier?`<span class="chip ok">Accueil sécurité fait sur papier</span>`:""}<span class="hint">Feuille d'accueil signée :</span>${d.hasScan?`<button class="btn ghost small" data-act="scanDl">Télécharger la feuille</button>`:`<span class="hint">aucune</span>`}<label class="btn ghost small" for="dScan">${d.hasScan?"Remplacer":"Joindre la feuille (PDF ou photos)"}</label><input type="file" id="dScan" accept="application/pdf,image/*" multiple hidden></div>
       <div class="field"><label>Notes</label><textarea data-ed="notes">${esc(d.notes||"")}</textarea></div>
       <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn" data-act="saveD">Enregistrer les modifications</button><button class="btn ghost" data-act="fiche">Télécharger la fiche de suivi (PDF)</button></div>
       <div><p class="lbl" style="margin-bottom:6px">Suivi</p><div class="timeline">${STEPS.map(st=>{ const r=stepState(d,st), s=r.s||{}; const c=r.state==="ok"?"ok":r.state==="late"?"late":["now","soon","wait"].includes(r.state)?"due":"";
-        return `<div><div class="tl ${c}"><i></i><span><b>${st.l}</b><br><span class="hint">${s.error&&!s.sentAt?`<span style="color:var(--bad)">Échec d'envoi : ${esc(s.error)}</span>`:r.state==="ok"?(st.local?(d.terrain?.skipped?`Étape passée le ${fmt(d.terrain.doneAt)} : ${esc(d.terrain.motif||"")}`:`Fait le ${fmt(d.terrain?.date?d.terrain.date+"T12:00:00":s.doneAt)}`):st.nomail?`Confirmé le ${fmt(s.doneAt)}`:st.form?`Répondu le ${fmt(s.doneAt)}`:`${s.auto?"Envoyé automatiquement":"Envoyé"} le ${fmt(s.sentAt)}`):r.state==="wait"?`Envoyé le ${fmt(s.sentAt)}, en attente de réponse`:r.state==="blocked"?"Désignez d'abord le parrain":`${S.mailOk?"Envoi automatique le":"Prévu le"} ${fmt(r.due)}`}</span></span>
+        return `<div><div class="tl ${c}"><i></i><span><b>${st.l}</b><br><span class="hint">${s.papier?"Accueil papier, pas de mail":s.error&&!s.sentAt?`<span style="color:var(--bad)">Échec d'envoi : ${esc(s.error)}</span>`:r.state==="ok"?(st.local?(d.terrain?.skipped?`Étape passée le ${fmt(d.terrain.doneAt)} : ${esc(d.terrain.motif||"")}`:`Fait le ${fmt(d.terrain?.date?d.terrain.date+"T12:00:00":s.doneAt)}`):st.nomail?`Confirmé le ${fmt(s.doneAt)}`:st.form?`Répondu le ${fmt(s.doneAt)}`:`${s.auto?"Envoyé automatiquement":"Envoyé"} le ${fmt(s.sentAt)}`):r.state==="wait"?`Envoyé le ${fmt(s.sentAt)}, en attente de réponse`:r.state==="blocked"?"Désignez d'abord le parrain":`${S.mailOk?"Envoi automatique le":"Prévu le"} ${fmt(r.due)}`}</span></span>
           <span>${st.local?`<button class="btn ${r.state==="ok"?"ghost":""} small" data-terrain="${d.id}">${r.state==="ok"?"Voir / modifier":"Remplir"}</button>`:st.nomail?"":r.state==="blocked"?"":`<button class="btn ghost small" data-mail="${d.id}:${st.k}">${r.state==="ok"&&!st.form?"Revoir":"Mail"}</button>`}</span></div>${st.form&&!st.nomail?ans(st.k):""}${st.local&&d.terrain?.doneAt&&!d.terrain.skipped?`<p class="hint" style="margin:4px 0 0 26px">Avec ${esc(d.terrain.chef||"—")} · ${(d.terrain.epi||[]).length} EPI remis${d.terrain.reprise?" · reprise des risques majeurs faite":""}</p>`:""}${st.nomail&&s.doneAt?`<p class="hint" style="margin:4px 0 0 26px">Par ${esc(s.answers?.signataire||"")}</p>`:""}</div>`; }).join("")}</div></div>
-      <div class="panel" style="padding:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">${d.finMission?`<span><b>Fin de mission le ${fmt(d.finMission+"T12:00:00")}</b> · l'évaluation du parrain et le questionnaire arrivant sont à envoyer maintenant.</span><button class="btn ghost small" data-act="unFin">Annuler</button>`:`<span class="hint">Mission courte ? Déclenchez l'évaluation du parrain et le questionnaire de l'arrivant sans attendre 1 mois.</span><input type="date" id="finDate" value="${new Date().toISOString().slice(0,10)}" style="width:auto"><button class="btn small" data-act="finMission">Fin de mission</button>`}</div>
+      <div class="panel" style="padding:12px;display:flex;gap:10px;flex-wrap:wrap;align-items:center">${d.finMission?`<span><b>Bilans demandés le ${fmt(d.finMission+"T12:00:00")}</b> · le bilan du parrain et celui de l'arrivant sont à envoyer maintenant.</span><button class="btn ghost small" data-act="unFin">Annuler</button>`:`<span class="hint">Période terminée ou fin de mission ? Envoyez les deux bilans sans attendre 1 mois.</span><input type="date" id="finDate" value="${new Date().toISOString().slice(0,10)}" style="width:auto"><button class="btn small" data-act="finMission">Envoyer les bilans maintenant</button>`}</div>
       ${reacsOf(d).length?`<div><p class="lbl" style="margin-bottom:6px">Réaccueils intérimaire</p>${reacsOf(d).map(x=>`<div class="trow"><span>Le ${fmt(x.date+"T12:00:00")} avec ${esc(x.resp||"—")}${x.derniereMission?` · après ${esc(dureeTxt(x.derniereMission,x.date))} d'interruption`:""}</span><button class="btn ghost small" data-rpdfd="${x.id}">Fiche PDF</button></div>`).join("")}</div>`:""}
       ${d.finParrainage?`<div class="callout good"><span>Fin de la période d'accompagnement actée le ${fmt(d.finParrainage)} (MASE 2.2.1.9).</span></div>`:""}
       <div style="border-top:1px solid var(--line);padding-top:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">${S.confirmDel===d.id?`<span class="hint">Supprimer définitivement ce dossier ?</span><button class="btn danger small" data-act="delD">Oui, supprimer</button><button class="btn ghost small" data-act="noDel">Annuler</button>`:`<button class="btn ghost small" data-act="askDel">Supprimer le dossier</button>`}</div>
@@ -454,6 +456,36 @@ function setupTSig(){
     c.addEventListener("pointerup",end); c.addEventListener("pointercancel",end); });
 }
 function openTerrain(id){ const d=S.dossiers.find(x=>x.id===id); if(!d) return; S.open=id; S.terr=terrainDraft(d); $("#sheet").innerHTML=vTerrain(d); setupTSig(); }
+const STATUTS=["Intérimaire","CDD","CDI","Apprenti","Stagiaire"];
+const LIEUX_P=[["Atelier de Cambronne",""],["Chanel","Chanel"],["Sanofi","Sanofi"],["BASF Meaux","BASF Meaux"],["Autre client","Autre client"]];
+function papierData(P){ const ch=P.lieu&&P.lieu!=="Atelier de Cambronne"; return {poste:P.poste, lieux:[ch?"Chantier client":"Atelier de Cambronne"], client:ch?P.lieu:""}; }
+function vPapier(){
+  const P=S.pap, cands=candidats(papierData(P));
+  return `<div class="sheet-bg" data-close><div class="sheet wide" role="dialog" aria-modal="true" aria-labelledby="pt">
+    <div class="sh"><div><span class="eyebrow">Arrivant déjà accueilli sur papier</span><h3 id="pt">Ajouter un accueil papier</h3></div><button class="x" data-close aria-label="Fermer">✕</button></div>
+    <div class="sb tform">
+      <p class="hint" style="margin:0">L'accueil sécurité est noté comme fait sur papier. Le dossier suit ensuite le même parcours : parrain, bilans, fiche de suivi.</p>
+      <div class="grid2">
+        ${[["prenom","Prénom"],["nom","Nom"],["emailPerso","Mail personnel (pour son bilan)"],["agence","Agence d'intérim"]].map(([k,l])=>`<div class="field"><label>${l}</label><input data-pap="${k}" value="${esc(P[k]||"")}"></div>`).join("")}
+        <div class="field"><label>Statut</label><select data-pap="statut">${STATUTS.map(x=>`<option ${P.statut===x?"selected":""}>${x}</option>`).join("")}</select></div>
+        <div class="field"><label>Poste</label><select data-pap="poste">${Object.entries(POSTES).map(([k,l])=>`<option value="${k}" ${P.poste===k?"selected":""}>${l}</option>`).join("")}</select></div>
+        <div class="field"><label>Date d'arrivée</label><input type="date" data-pap="date" value="${esc(P.date||"")}"></div>
+        <div class="field"><label>Lieu</label><select data-pap="lieu">${LIEUX_P.map(([l])=>`<option ${P.lieu===l?"selected":""}>${l}</option>`).join("")}</select></div>
+        <div class="field full"><label>Parrain tuteur ${cands[0]?`<span class="chip ok">proposé selon le lieu et le poste</span>`:""}</label><select data-pap="parrain">${S.parrains.filter(p=>p.nom).map(p=>`<option ${P.parrain===p.nom?"selected":""}>${esc(p.nom)}</option>`).join("")}</select></div>
+      </div>
+      <label class="tcheck"><input type="checkbox" data-papc="terrainPapier" ${P.terrainPapier?"checked":""}> L'accueil au poste a aussi été fait sur papier</label>
+      <div class="field"><label>Bilans</label><div class="seg">${[["now","À envoyer maintenant (période terminée)"],["later","Dans 1 mois"]].map(([k,l])=>`<button type="button" data-papbilan="${k}" aria-pressed="${P.bilan===k}">${l}</button>`).join("")}</div></div>
+      <div class="field"><label>Feuille d'accueil signée (facultatif, vous pourrez l'ajouter plus tard)</label><input type="file" id="papFiles" accept="application/pdf,image/*" multiple></div>
+      <p class="err" id="perr" style="margin:0"></p>
+      <div><button class="btn good" data-act="papierCreate">Créer le dossier</button></div>
+    </div></div></div>`;
+}
+async function attachScan(d,files){
+  const F=await Promise.all([...files].map(async f=>({name:f.name,type:f.type,bytes:await f.arrayBuffer()})));
+  const pdfB=await reacScanPdf(F); if(pdfB.byteLength>5.5*1024*1024) throw Object.assign(new Error("lourd"),{code:"size"});
+  await api("dossiers/"+encodeURIComponent(d.id)+"/scan",{method:"PUT",headers:{"content-type":"application/pdf"},body:pdfB});
+  d.hasScan=true; d.scanName=[...files].map(f=>f.name).join(", ");
+}
 function vMail(d,k){
   const P=S.mailPrev, st=STEPS.find(x=>x.k===k), s=(d.steps||{})[k]||{};
   const head=`<div class="sh"><div><span class="eyebrow">${esc(fullName(d))}</span><h3 id="mt">${st.l}</h3></div><button class="x" data-close aria-label="Fermer">✕</button></div>`;
@@ -841,6 +873,8 @@ document.addEventListener("click",async e=>{
   if(t.matches("[data-close]") && (e.target===t||t.tagName==="BUTTON")){ $("#sheet").innerHTML=""; S.open=null; S.mail=null; S.confirmDel=null; return; }
   if(t.dataset.tab){ S.tab=t.dataset.tab; render(); return; }
   if(t.dataset.recu){ const r=S.recus.find(x=>x.id===t.dataset.recu); if(r) openRecu(r); return; }
+  if(t.dataset.seen){ const d=JSON.parse(JSON.stringify(S.dossiers.find(x=>x.id===t.dataset.seen))); ["p1m","q1m","q3m"].forEach(k=>{ const s=d.steps?.[k]; if(s&&s.doneAt&&!s.seenAt) s.seenAt=new Date().toISOString(); }); try{ await saveDossier(d); }catch(_){ } S.open=d.id; $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===d.id)); return; }
+  if(t.dataset.papbilan){ S.pap.bilan=t.dataset.papbilan; t.parentElement.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b===t)); return; }
   if(t.dataset.terrain){ openTerrain(t.dataset.terrain); return; }
   if(t.dataset.tseg){ const [g,k]=t.dataset.tseg.split("."); S.terr[g][k]=t.dataset.v; t.parentElement.querySelectorAll("button").forEach(b=>b.setAttribute("aria-pressed",b===t)); return; }
   if(t.dataset.tsigclear){ delete S.terr[t.dataset.tsigclear]; const d=S.dossiers.find(x=>x.id===S.open); $("#sheet").innerHTML=vTerrain(d); setupTSig(); return; }
@@ -854,6 +888,20 @@ document.addEventListener("click",async e=>{
   if(a==="dlrecu"){ if(S.imp?.bytes) download(new Blob([S.imp.bytes],{type:"application/pdf"}),S.imp.name); return; }
   if(a==="logout"){ try{ sessionStorage.removeItem("sse_tok"); }catch(_){ } TOKEN=null; clearInterval(window.__poll); showLock(false); return; }
   if(a==="copyHtml") return copyHtml(t);
+  if(a==="papierNew"){ const ap=autoParrain({poste:"soudeur",lieux:["Atelier de Cambronne"]}); S.pap={statut:"Intérimaire",poste:"soudeur",lieu:"Atelier de Cambronne",date:new Date().toISOString().slice(0,10),parrain:ap?.nom||"",terrainPapier:true,bilan:"now"}; $("#sheet").innerHTML=vPapier(); return; }
+  if(a==="papierCreate"){ const P=S.pap, e=$("#perr"); document.querySelectorAll("[data-pap]").forEach(i=>P[i.dataset.pap]=i.value.trim()); document.querySelectorAll("[data-papc]").forEach(i=>P[i.dataset.papc]=i.checked);
+    if(!P.prenom||!P.nom){ e.textContent="Renseignez au moins le prénom et le nom."; return; }
+    const pa=S.parrains.find(p=>p.nom===P.parrain), now=new Date().toISOString(), loc=papierData(P);
+    const d={id:(P.nom+"-"+P.prenom+"-"+(P.date||"")).toLowerCase().normalize("NFD").replace(/[^\w-]+/g,"").slice(0,60)+"-"+tok().slice(0,6), nom:P.nom, prenom:P.prenom, emailPerso:P.emailPerso||"", statut:P.statut, agence:P.agence||"", poste:P.poste, posteLabel:POSTES[P.poste]||"", date:P.date||now.slice(0,10), lieux:loc.lieux, client:loc.client, chantier:"", quiz:null, rq:null, risques:[], prat:[], formations:[],
+      accueilPapier:true, parrain:pa?{nom:pa.nom,email:pa.email||"",pourquoi:pa.pourquoi||"",...critOf(pa)}:null, validated:"Accueil papier", validatedAt:now, createdAt:now, notes:"",
+      steps:{mailArrivant:{sentAt:now,papier:true},mailParrain:{sentAt:now,papier:true},ack:{token:tok()},q1m:{token:tok()},p1m:{token:tok()},q3m:{token:tok()}}};
+    if(P.terrainPapier) d.terrain={skipped:true, motif:"Accueil au poste fait sur papier", doneAt:now};
+    if(P.bilan==="now") d.finMission=now.slice(0,10);
+    t.disabled=true; t.textContent="Création…";
+    try{ const F=$("#papFiles").files; if(F&&F.length) await attachScan(d,F); await saveDossier(d); toast("Dossier créé."); S.open=d.id; $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===d.id)); }
+    catch(err){ t.disabled=false; t.textContent="Créer le dossier"; e.textContent=err.code==="size"?"La feuille scannée dépasse 5,5 Mo : scannez en qualité standard.":"La création a échoué. Si vous avez joint une photo iPhone (HEIC), envoyez-la en JPG."; }
+    return; }
+  if(a==="scanDl"){ const d=S.dossiers.find(x=>x.id===S.open); try{ const b=await (await api("dossiers/"+encodeURIComponent(d.id)+"/scan")).arrayBuffer(); download(new Blob([b],{type:"application/pdf"}),`Accueil_papier_${d.nom}_${d.prenom}.pdf`); }catch(_){ toast("Feuille introuvable."); } return; }
   if(a==="skipTerrain"||a==="unskipTerrain"){ const d=JSON.parse(JSON.stringify(S.dossiers.find(x=>x.id===S.open)));
     if(a==="skipTerrain"){ const m=$("#skipMotif").value, x=$("#skipAutre").value.trim(); d.terrain={skipped:true, motif:x?(m==="Autre"?x:m+" ("+x+")"):m, doneAt:new Date().toISOString()}; }
     else delete d.terrain;
@@ -886,6 +934,8 @@ document.addEventListener("click",async e=>{
 });
 document.addEventListener("change",async e=>{
   const el=e.target;
+  if(el.dataset.pap==="poste"||el.dataset.pap==="lieu"){ document.querySelectorAll("[data-pap]").forEach(i=>S.pap[i.dataset.pap]=i.value.trim()); document.querySelectorAll("[data-papc]").forEach(i=>S.pap[i.dataset.papc]=i.checked); const ap=autoParrain(papierData(S.pap)); if(ap) S.pap.parrain=ap.nom; $("#sheet").innerHTML=vPapier(); return; }
+  if(el.id==="dScan"){ const d=JSON.parse(JSON.stringify(S.dossiers.find(x=>x.id===S.open))); if(!el.files.length) return; try{ await attachScan(d,el.files); await saveDossier(d); toast("Feuille ajoutée au dossier."); $("#sheet").innerHTML=vDetail(S.dossiers.find(x=>x.id===d.id)); }catch(err){ toast(err.code==="size"?"Fichier trop lourd (5,5 Mo maximum).":"La feuille n'a pas pu être ajoutée (photo HEIC ? envoyez-la en JPG)."); } return; }
   if(el.id==="pdf"){ const f=el.files[0]; if(!f) return; const r=await readPdf(f); if(r.err&&!r.data){ S.imp={err:r.err}; render(); return; } const ap=autoParrain(r.data); const keep=S.imp?.fromRecu?{fromRecu:S.imp.fromRecu}:{}; S.imp={...r, ...keep, parrain:ap?{...ap}:null, auto:!!ap}; render(); return; }
   if(el.id==="com"){ S.comment=el.value; return; }
   if(el.id==="sigimg"){ const f=el.files[0]; if(!f) return; const u=URL.createObjectURL(f), im=new Image(); im.onload=()=>{ const c=document.createElement("canvas"),W=900,H=300; c.width=W;c.height=H; const x=c.getContext("2d"), r=Math.min(W/im.width,H/im.height); x.drawImage(im,(W-im.width*r)/2,(H-im.height*r)/2,im.width*r,im.height*r); const d=x.getImageData(0,0,W,H),p=d.data; for(let i=0;i<p.length;i+=4){ if((p[i]+p[i+1]+p[i+2])/3>200) p[i+3]=0; } x.putImageData(d,0,0); S.sig=c.toDataURL("image/png"); URL.revokeObjectURL(u); render(); }; im.src=u; return; }

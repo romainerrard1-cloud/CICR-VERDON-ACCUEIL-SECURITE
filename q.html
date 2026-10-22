@@ -64,7 +64,7 @@ const stars = n => `<div class="stars" role="radiogroup">${[1,2,3,4,5].map(i=>`<
 const seg = (n,opts) => `<div class="seg">${opts.map(o=>`<button type="button" data-seg="${n}" data-v="${esc(o)}" aria-pressed="${V[n]===o}">${esc(o)}</button>`).join("")}</div>`;
 const LVL = ["Acquis","En cours","Non acquis"];
 const DEF = {
-  q1m:{t:"Votre premier mois chez CICR Verdon", lead:`Bonjour ${esc(A)}, cela fait un mois que vous nous avez rejoints. Votre avis nous aide à améliorer l'accueil. Deux minutes suffisent.`,
+  q1m:{t:"Bilan de votre passage chez CICR Verdon", lead:`Bonjour ${esc(A)}, votre avis sur votre accueil, la sécurité et votre parrain tuteur nous aide à nous améliorer. Deux minutes suffisent.`,
     req:["accueil","consignes","parrain","epi","securite","danger"],
     body:()=>`
       <div class="q"><b>L'accueil sécurité vous a-t-il bien préparé à votre arrivée ?</b>${stars("accueil")}</div>
@@ -74,11 +74,11 @@ const DEF = {
       <div class="q"><b>Vous sentez-vous en sécurité à votre poste ?</b>${stars("securite")}</div>
       <div class="q"><b>Avez-vous vu une situation dangereuse qui n'a pas été traitée ?</b>${seg("danger",["Non","Oui"])}${V.danger==="Oui"?`<textarea data-txt="danger_detail" placeholder="Décrivez-la en quelques mots">${esc(V.danger_detail||"")}</textarea>`:""}</div>
       <div class="q"><b>Un commentaire, une idée ?</b><small>Facultatif</small><textarea data-txt="commentaire">${esc(V.commentaire||"")}</textarea></div>`},
-  p1m:{t:"Bilan à 1 mois de votre filleul", lead:`Vous êtes parrain tuteur de ${esc(A)||"votre nouvel arrivant"} depuis un mois. Merci d'évaluer ses premières semaines.`,
+  p1m:{t:"Bilan de passage", lead:`Vous avez accompagné ${esc(A)||"un nouvel arrivant"} en tant que parrain tuteur. Merci de faire le bilan de son passage chez CICR Verdon.`,
     req:["c_securite","c_risques","c_epi","c_gestes","c_autonomie","c_qualite","c_ponctualite","c_hierarchie","c_equipe","c_vigilance","fin_parrainage","signataire","signature"],
     body:()=>`
       <div class="q"><b>Notez ses premières semaines</b><small>1 étoile = insuffisant · 5 étoiles = excellent</small><div class="grid">${[["c_securite","Respect des consignes de sécurité"],["c_risques","Maîtrise des 3 risques majeurs de son poste"],["c_epi","Port des EPI"],["c_gestes","Maîtrise des gestes du métier"],["c_autonomie","Autonomie"],["c_qualite","Qualité du travail"],["c_ponctualite","Ponctualité, disponibilité et présentation"],["c_hierarchie","Rapport avec la hiérarchie"],["c_equipe","Intégration dans l'équipe"],["c_vigilance","Vigilance partagée et remontées d'information"]].map(([k,l])=>`<div class="row"><span>${l}</span>${stars(k)}</div>`).join("")}</div></div>
-      <div class="q"><b>La période d'accompagnement peut-elle se terminer ?</b><small>La fin du parrainage est actée avec le service SSE (exigence MASE).</small>${seg("fin_parrainage",["Oui, elle peut se terminer","Non, à prolonger"])}</div>
+      <div class="q"><b>Confirmation finale</b><small>Votre confirmation clôture la période d'accompagnement (exigence MASE).</small>${seg("fin_parrainage",["Oui, je confirme ce bilan"])}</div>
       <div class="q"><b>Commentaire</b><small>Facultatif</small><textarea data-txt="commentaire">${esc(V.commentaire||"")}</textarea></div>
       <div class="q"><b>Signature du parrain tuteur</b><small>Votre nom et votre signature valident cette évaluation. Elle est enregistrée dans le dossier de l'arrivant.</small>
         <input class="inp" data-txt="signataire" placeholder="Prénom Nom du parrain" value="${esc(V.signataire||"")}">
@@ -94,7 +94,7 @@ const DEF = {
         <li>Vérifier le port des EPI et la bonne compréhension des consignes de sécurité.</li>
         <li>L'accompagner, avec le chef d'équipe, dans la partie pratique de l'accueil renforcé.</li>
         <li>Rester disponible pour ses questions, et remonter toute difficulté au service SSE.</li>
-        <li>Évaluer ses premières semaines (à 1 mois ou en fin de mission) et acter la fin de l'accompagnement.</li></ul></div>
+        <li>Faire le bilan de son passage (à 1 mois ou en fin de mission) et confirmer la fin de l'accompagnement.</li></ul></div>
       <div class="q"><b>Confirmation</b>${seg("confirme",["Je confirme avoir pris connaissance de mes missions"])}</div>
       <div class="q"><b>Votre nom</b><input class="inp" data-txt="signataire" placeholder="Prénom Nom" value="${esc(V.signataire||"")}"></div>`},
   q3m:{t:"Votre expérience chez Verdon", lead:`Bonjour ${esc(A)}, cela fait trois mois que vous travaillez avec nous. Comment cela s'est-il passé ?`,

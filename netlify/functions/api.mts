@@ -121,7 +121,22 @@ export default async (req: Request, _context: Context) => {
       return json({ dossiers, recus, reaccueils, parrains: (parrains as any)?.list || [], settings: settings || {}, mailOk: mailConfigured() });
     }
 
-    if (p[0] === "dossiers" && p[1] && safeId(p[1])) {
+    if (p[0] === "dossiers" && p[1] && safeId(p[1]) && p[2] === "scan") {
+      if (m === "PUT") {
+        const buf = await req.arrayBuffer();
+        if (buf.byteLength > 6 * 1024 * 1024) return json({ error: "trop lourd" }, 413);
+        if (new TextDecoder().decode(buf.slice(0, 5)) !== "%PDF-") return json({ error: "pdf" }, 400);
+        await st.set("dscan/" + p[1], buf);
+        return json({ ok: true });
+      }
+      if (m === "GET") {
+        const buf = await st.get("dscan/" + p[1], { type: "arrayBuffer" });
+        if (!buf) return json({ error: "scan" }, 404);
+        return new Response(buf, { headers: { "content-type": "application/pdf", "cache-control": "no-store" } });
+      }
+    }
+
+    if (p[0] === "dossiers" && p[1] && safeId(p[1]) && !p[2]) {
       const id = p[1];
       if (m === "PUT") {
         const d = await req.json();
@@ -144,6 +159,7 @@ export default async (req: Request, _context: Context) => {
           for (const k of FORMS) { const t = d.steps?.[k]?.token; if (t) await st.delete("tok/" + t); }
           if (d.recuId) await st.delete("pdf/" + d.recuId);
         }
+        await st.delete("dscan/" + id);
         await st.delete("dossiers/" + id);
         return json({ ok: true });
       }
