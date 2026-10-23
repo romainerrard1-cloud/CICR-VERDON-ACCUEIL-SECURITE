@@ -152,6 +152,7 @@ export async function processDossier(d: any, settings: any) {
   for (const st of STEPS) {
     const s = d.steps[st.k] || (d.steps[st.k] = {});
     if (s.sentAt || (st.form && s.doneAt)) continue;
+    if (st.k === "q3m" && d.finMission) continue; /* fin de mission : pas de bilan à 3 mois */
     if (st.to === "parrain" && !d.parrain?.email) continue;
     if (st.d > 0 && addDays(d.date, st.d) > today) continue; /* bienvenue + parrain : dès la désignation */
     if (s.error && s.tries >= 3) continue;
