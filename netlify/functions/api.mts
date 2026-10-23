@@ -7,7 +7,7 @@ import { mailFor, renderText, renderHtml, siteUrl, sendMail, processDossier, mai
    Public : POST /api/accueil (fin d'accueil), POST /api/q (questionnaires), POST /api/login.
    Privé (jeton) : état, dossiers, accueils reçus, parrains, réglages. */
 
-const ANSWER_KEYS = ["accueil","consignes","parrain","epi","securite","danger","danger_detail","commentaire","c_securite","c_risques","c_epi","c_gestes","c_autonomie","c_qualite","c_ponctualite","c_hierarchie","c_equipe","c_vigilance","fin_parrainage","experience","recommande","signataire","confirme"];
+const ANSWER_KEYS = ["accueil","consignes","parrain","epi","securite","danger","danger_detail","commentaire","c_securite","c_risques","c_epi","c_gestes","c_autonomie","c_qualite","c_ponctualite","c_hierarchie","c_equipe","c_vigilance","fin_parrainage","experience","recommande","signataire","confirme","positif","amelio","p_positif","p_amelio"];
 const FORMS = ["q1m","p1m","q3m","ack"];
 const enc = new TextEncoder();
 

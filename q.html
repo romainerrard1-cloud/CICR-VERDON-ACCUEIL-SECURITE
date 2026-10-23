@@ -70,6 +70,8 @@ const DEF = {
       <div class="q"><b>L'accueil sécurité vous a-t-il bien préparé à votre arrivée ?</b>${stars("accueil")}</div>
       <div class="q"><b>Les consignes de sécurité de votre poste sont-elles claires ?</b>${stars("consignes")}</div>
       <div class="q"><b>Votre parrain tuteur${PA?` (${esc(PA)})`:""} vous a-t-il bien accompagné ?</b>${stars("parrain")}</div>
+      <div class="q"><b>Votre parrain : points positifs</b><small>Facultatif</small><textarea data-txt="p_positif">${esc(V.p_positif||"")}</textarea></div>
+      <div class="q"><b>Votre parrain : points d'amélioration</b><small>Facultatif</small><textarea data-txt="p_amelio">${esc(V.p_amelio||"")}</textarea></div>
       <div class="q"><b>Avez-vous eu tous vos EPI dès le premier jour ?</b>${seg("epi",["Oui","Non"])}</div>
       <div class="q"><b>Vous sentez-vous en sécurité à votre poste ?</b>${stars("securite")}</div>
       <div class="q"><b>Avez-vous vu une situation dangereuse qui n'a pas été traitée ?</b>${seg("danger",["Non","Oui"])}${V.danger==="Oui"?`<textarea data-txt="danger_detail" placeholder="Décrivez-la en quelques mots">${esc(V.danger_detail||"")}</textarea>`:""}</div>
@@ -79,7 +81,8 @@ const DEF = {
     body:()=>`
       <div class="q"><b>Notez ses premières semaines</b><small>1 étoile = insuffisant · 5 étoiles = excellent</small><div class="grid">${[["c_securite","Respect des consignes de sécurité"],["c_risques","Maîtrise des 3 risques majeurs de son poste"],["c_epi","Port des EPI"],["c_gestes","Maîtrise des gestes du métier"],["c_autonomie","Autonomie"],["c_qualite","Qualité du travail"],["c_ponctualite","Ponctualité, disponibilité et présentation"],["c_hierarchie","Rapport avec la hiérarchie"],["c_equipe","Intégration dans l'équipe"],["c_vigilance","Vigilance partagée et remontées d'information"]].map(([k,l])=>`<div class="row"><span>${l}</span>${stars(k)}</div>`).join("")}</div></div>
       <div class="q"><b>Confirmation finale</b><small>Votre confirmation clôture la période d'accompagnement (exigence MASE).</small>${seg("fin_parrainage",["Oui, je confirme ce bilan"])}</div>
-      <div class="q"><b>Commentaire</b><small>Facultatif</small><textarea data-txt="commentaire">${esc(V.commentaire||"")}</textarea></div>
+      <div class="q"><b>Points positifs</b><small>Facultatif</small><textarea data-txt="positif">${esc(V.positif||"")}</textarea></div>
+      <div class="q"><b>Points d'amélioration</b><small>Facultatif</small><textarea data-txt="amelio">${esc(V.amelio||"")}</textarea></div>
       <div class="q"><b>Signature du parrain tuteur</b><small>Votre nom et votre signature valident cette évaluation. Elle est enregistrée dans le dossier de l'arrivant.</small>
         <input class="inp" data-txt="signataire" placeholder="Prénom Nom du parrain" value="${esc(V.signataire||"")}">
         <div class="sigw"><canvas id="sig"></canvas><span class="ph" ${V.signature?"hidden":""}>Signez ici avec le doigt ou la souris</span></div>

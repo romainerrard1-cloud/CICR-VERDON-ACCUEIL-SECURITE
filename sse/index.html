@@ -94,6 +94,9 @@ tr.click{cursor:pointer}tr.click:hover td{background:var(--surface-2)}
 .tchecks{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:6px}.tchecks label,.tcheck{display:flex;gap:6px;align-items:center;font-size:.92rem}.tchecks input,.tcheck input{width:auto}
 .tsig{height:150px}
 @media (max-width:620px){.trow{grid-template-columns:1fr}}
+.pavis{grid-column:1/-1;display:grid;gap:6px;background:var(--surface-2);border-radius:10px;padding:8px 12px;font-size:.9rem}
+.pavis .stars{color:#e0a800;letter-spacing:1px}.pavis summary{cursor:pointer;color:var(--action);font-size:.88rem}
+.pcom{border-top:1px solid var(--line);padding-top:6px;margin-top:6px;display:grid;gap:3px}.pcom p{margin:0}.pos{color:var(--good)}.ame{color:var(--warn)}
 .crits{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
 .pcrit{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:.86rem;padding:4px 0 8px}.pcrit label{display:flex;gap:5px;align-items:center}.pcrit input{width:auto}
 details.alt summary{cursor:pointer;color:var(--muted);font-size:.88rem}
@@ -126,7 +129,7 @@ const STEPS = [
   {k:"q3m", l:"Expérience à 3 mois (étoiles + avis Google)", d:90, to:"arrivant", form:true}
 ];
 const stepsFor = d => STEPS.filter(st=>!(d.finMission && st.k==="q3m")); /* fin de mission : pas de bilan à 3 mois */
-const LABELS = {accueil:"Accueil sécurité",consignes:"Consignes claires",parrain:"Accompagnement du parrain",epi:"EPI dès le 1er jour",securite:"Se sent en sécurité",danger:"Situation dangereuse non traitée",danger_detail:"Détail",commentaire:"Commentaire",c_securite:"Respect des consignes SSE",c_risques:"Maîtrise des 3 risques majeurs",c_epi:"Port des EPI",c_gestes:"Gestes du métier",c_autonomie:"Autonomie",c_qualite:"Qualité du travail",c_ponctualite:"Ponctualité, disponibilité, présentation",c_hierarchie:"Rapport avec la hiérarchie",signataire:"Signé par",c_equipe:"Intégration dans l'équipe",c_vigilance:"Vigilance et remontées",fin_parrainage:"Confirmation finale",experience:"Expérience chez Verdon",recommande:"Recommanderait CICR Verdon"};
+const LABELS = {positif:"Points positifs",amelio:"Points d'amélioration",p_positif:"Parrain : points positifs",p_amelio:"Parrain : points d'amélioration",accueil:"Accueil sécurité",consignes:"Consignes claires",parrain:"Accompagnement du parrain",epi:"EPI dès le 1er jour",securite:"Se sent en sécurité",danger:"Situation dangereuse non traitée",danger_detail:"Détail",commentaire:"Commentaire",c_securite:"Respect des consignes SSE",c_risques:"Maîtrise des 3 risques majeurs",c_epi:"Port des EPI",c_gestes:"Gestes du métier",c_autonomie:"Autonomie",c_qualite:"Qualité du travail",c_ponctualite:"Ponctualité, disponibilité, présentation",c_hierarchie:"Rapport avec la hiérarchie",signataire:"Signé par",c_equipe:"Intégration dans l'équipe",c_vigilance:"Vigilance et remontées",fin_parrainage:"Confirmation finale",experience:"Expérience chez Verdon",recommande:"Recommanderait CICR Verdon"};
 const CRIT = [["crit_entreprise","Connaissance de l'entreprise"],["crit_technique","Compétences techniques"],["crit_sse","Sensibilité SSE, adhère à nos exigences"],["crit_pedago","Aptitudes pédagogiques"]];
 const critOf = p => { const o={}; CRIT.forEach(([k])=>{ if(p&&p[k]) o[k]=true; }); return o; };
 const critHtml = p => `<div class="crits">${CRIT.map(([k,l])=>`<span class="chip ${p&&p[k]?"ok":"late"}">${p&&p[k]?"✓":"✗"} ${l}</span>`).join("")}</div>`;
@@ -371,6 +374,13 @@ function vImport(){
     `:""}
   </div>`;
 }
+function parrainAvis(nom){
+  const L=S.dossiers.filter(d=>d.parrain?.nom===nom && d.steps?.q1m?.answers).map(d=>({d,a:d.steps.q1m.answers,at:d.steps.q1m.doneAt}));
+  const notes=L.map(x=>+x.a.parrain).filter(n=>n>0), moy=notes.length?notes.reduce((a,b)=>a+b,0)/notes.length:null;
+  const com=L.filter(x=>x.a.p_positif||x.a.p_amelio);
+  return `<div class="pavis">${moy==null?`<span class="hint">Pas encore de note des arrivants.</span>`:`<span class="pnote"><span class="stars">${"★".repeat(Math.round(moy))}${"☆".repeat(5-Math.round(moy))}</span> <b>${moy.toFixed(1).replace(".",",")}/5</b> <span class="hint">· ${notes.length} bilan${notes.length>1?"s":""} d'arrivant${notes.length>1?"s":""}</span></span>`}
+    ${com.length?`<details><summary>Commentaires des arrivants (${com.length})</summary>${com.map(x=>`<div class="pcom"><span class="hint">${esc(fullName(x.d))} · ${fmt(x.at)}</span>${x.a.p_positif?`<p><b class="pos">Points positifs :</b> ${esc(x.a.p_positif)}</p>`:""}${x.a.p_amelio?`<p><b class="ame">Points d'amélioration :</b> ${esc(x.a.p_amelio)}</p>`:""}</div>`).join("")}</details>`:""}</div>`;
+}
 function vParrains(){
   const missing=PARRAINS_CICR.filter(x=>!S.parrains.some(p=>p.nom.toLowerCase()===x.nom.toLowerCase())).length;
   return `<div class="head"><div><p class="eyebrow">${S.parrains.length} parrain${S.parrains.length>1?"s":""}</p><h2>Parrains tuteurs</h2></div><div style="display:flex;gap:8px;flex-wrap:wrap">${missing?`<button class="btn ghost" data-act="importP">Ajouter les parrains CICR (${missing})</button>`:""}<button class="btn ghost" data-act="addP">Ajouter un parrain</button><button class="btn" data-act="saveP">Enregistrer</button></div></div>
@@ -378,7 +388,7 @@ function vParrains(){
   <div class="panel">${S.parrains.length?`<div class="prow" style="font-weight:600;font-size:.8rem;color:var(--muted)"><span>Lieu et fonction</span><span>Nom</span><span>Mail</span><span>Pourquoi ce parrain (compétences, expérience)</span><span></span></div>`:""}
   ${S.parrains.map((p,i)=>`<div class="prow"><div style="display:grid;gap:6px"><select data-p="${i}:site">${SITES.map(([k,l])=>`<option value="${k}" ${(p.site||"atelier")===k?"selected":""}>${l}</option>`).join("")}</select><select data-p="${i}:famille">${Object.entries(FAM_L).map(([k,l])=>`<option value="${k}" ${famOf(p)===k?"selected":""}>${l}</option>`).join("")}</select></div>
     <input data-p="${i}:nom" value="${esc(p.nom)}" placeholder="Prénom Nom"><input data-p="${i}:email" value="${esc(p.email)}" placeholder="mail@groupe-verdon.com" ${p.email?"":'style="border-color:var(--bad)"'}><textarea data-p="${i}:pourquoi" placeholder="Ex. : 15 ans de tuyauterie inox, SST, exigeant sur la sécurité">${esc(p.pourquoi||"")}</textarea><button class="btn ghost small" data-delp="${i}">Retirer</button>
-    <div class="pcrit"><span class="hint">Critères de désignation (MASE 2.2.1) :</span>${CRIT.map(([k,l])=>`<label><input type="checkbox" data-p="${i}:${k}" ${p[k]?"checked":""}> ${l}</label>`).join("")}</div></div>`).join("") || `<div class="empty"><b>Aucun parrain enregistré.</b><span>Cliquez sur « Ajouter les parrains CICR ».</span></div>`}</div>`;
+    <div class="pcrit"><span class="hint">Critères de désignation (MASE 2.2.1) :</span>${CRIT.map(([k,l])=>`<label><input type="checkbox" data-p="${i}:${k}" ${p[k]?"checked":""}> ${l}</label>`).join("")}</div>${p.nom?parrainAvis(p.nom):""}</div>`).join("") || `<div class="empty"><b>Aucun parrain enregistré.</b><span>Cliquez sur « Ajouter les parrains CICR ».</span></div>`}</div>`;
 }
 function vReglages(){
   const st=S.settings;
